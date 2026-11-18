@@ -56,10 +56,14 @@ class VehicleData:
     window_fr_open: bool = False
     window_rl_open: bool = False
     window_rr_open: bool = False
-    tire_fl_bar: float = 0.0
-    tire_fr_bar: float = 0.0
-    tire_rl_bar: float = 0.0
-    tire_rr_bar: float = 0.0
+    tire_fl_bar: float | None = None
+    tire_fr_bar: float | None = None
+    tire_rl_bar: float | None = None
+    tire_rr_bar: float | None = None
+    tire_fl_alarm: int | None = None
+    tire_fr_alarm: int | None = None
+    tire_rl_alarm: int | None = None
+    tire_rr_alarm: int | None = None
     # Comfort STATE sensors (read-only). They reflect reality on the B10 even though the
     # matching remote COMMANDS don't actuate (see capability_profile). 0 = off, >0 = level/on.
     seat_heat_driver: int = 0       # signal 2100 driverSeatHeating

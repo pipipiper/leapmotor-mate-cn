@@ -24,74 +24,74 @@ SOON_DAYS = 30           # within this many days of due → "due soon"
 _DAYS_PER_MONTH = 30.44
 
 # ── Localisation (self-contained; chrome nav label lives in i18n.py) ──────────
-# Item + category + phrase strings for en/it/fr/de/pt-PT/pl/nl/es; a missing key falls back to en.
+# Item + category + phrase strings for en/it/fr/de/pt-PT/pl/nl/es/cs; a missing key falls back to en.
 _LABELS = {
-    "brake_fluid_replace":   {"en": "Brake fluid — replace",        "it": "Liquido freni — sostituzione",        "fr": "Liquide de frein — remplacer",            "de": "Bremsflüssigkeit — wechseln", "pt-PT": "Líquido dos travões — substituição", "pl": "Płyn hamulcowy — wymiana", "nl": "Remvloeistof — vervangen", "es": "Líquido de frenos — sustitución"},
-    "brake_fluid_inspect":   {"en": "Brake fluid level — check",    "it": "Livello liquido freni — controllo",    "fr": "Niveau de liquide de frein — vérifier",   "de": "Bremsflüssigkeitsstand — prüfen", "pt-PT": "Nível do líquido dos travões — verificação", "pl": "Poziom płynu hamulcowego — kontrola", "nl": "Remvloeistofpeil — controleren", "es": "Nivel del líquido de frenos — comprobación"},
-    "brake_pads_inspect":    {"en": "Brake pads — check",           "it": "Pastiglie freni — controllo",          "fr": "Plaquettes de frein — vérifier",          "de": "Bremsbeläge — prüfen", "pt-PT": "Pastilhas dos travões — verificação", "pl": "Klocki hamulcowe — kontrola", "nl": "Remblokken — controleren", "es": "Pastillas de freno — comprobación"},
-    "brake_discs_inspect":   {"en": "Brake discs — check",          "it": "Dischi freni — controllo",             "fr": "Disques de frein — vérifier",             "de": "Bremsscheiben — prüfen", "pt-PT": "Discos dos travões — verificação", "pl": "Tarcze hamulcowe — kontrola", "nl": "Remschijven — controleren", "es": "Discos de freno — comprobación"},
-    "brake_hoses_inspect":   {"en": "Brake hoses & lines — check",  "it": "Tubi freni — controllo",               "fr": "Durites & conduites de frein — vérifier", "de": "Bremsschläuche & -leitungen — prüfen", "pt-PT": "Tubos e linhas dos travões — verificação", "pl": "Przewody hamulcowe — kontrola", "nl": "Remslangen en -leidingen — controleren", "es": "Latiguillos y tubos de freno — comprobación"},
-    "cabin_filter_replace":  {"en": "Cabin (A/C) filter — replace", "it": "Filtro abitacolo (A/C) — sostituzione","fr": "Filtre d'habitacle (clim) — remplacer",   "de": "Innenraumfilter (Klima) — wechseln", "pt-PT": "Filtro do habitáculo (A/C) — substituição", "pl": "Filtr kabinowy (klimatyzacja) — wymiana", "nl": "Interieurfilter (airco) — vervangen", "es": "Filtro de habitáculo (A/A) — sustitución"},
-    "coolant_replace":       {"en": "Coolant — replace",            "it": "Refrigerante — sostituzione",          "fr": "Liquide de refroidissement — remplacer",  "de": "Kühlmittel — wechseln", "pt-PT": "Líquido de refrigeração — substituição", "pl": "Płyn chłodniczy — wymiana", "nl": "Koelvloeistof — vervangen", "es": "Líquido refrigerante — sustitución"},
-    "coolant_inspect":       {"en": "Coolant level — check",        "it": "Livello refrigerante — controllo",     "fr": "Niveau de refroidissement — vérifier",    "de": "Kühlmittelstand — prüfen", "pt-PT": "Nível do líquido de refrigeração — verificação", "pl": "Poziom płynu chłodniczego — kontrola", "nl": "Koelvloeistofpeil — controleren", "es": "Nivel del líquido refrigerante — comprobación"},
-    "reducer_oil_replace":   {"en": "Reducer (gearbox) oil — replace", "it": "Olio riduttore — sostituzione",     "fr": "Huile du réducteur — remplacer",          "de": "Reduktoröl — wechseln", "pt-PT": "Óleo do redutor (caixa) — substituição", "pl": "Olej przekładni — wymiana", "nl": "Olie reductiekast — vervangen", "es": "Aceite del reductor — sustitución"},
-    "reducer_filter_replace":{"en": "Reducer filter — replace",     "it": "Filtro riduttore — sostituzione",      "fr": "Filtre du réducteur — remplacer",         "de": "Reduktorfilter — wechseln", "pt-PT": "Filtro do redutor — substituição", "pl": "Filtr przekładni — wymiana", "nl": "Filter reductiekast — vervangen", "es": "Filtro del reductor — sustitución"},
-    "tire_replace":          {"en": "Tires — replace",              "it": "Pneumatici — sostituzione",            "fr": "Pneus — remplacer",                       "de": "Reifen — wechseln", "pt-PT": "Pneus — substituição", "pl": "Opony — wymiana", "nl": "Banden — vervangen", "es": "Neumáticos — sustitución"},
-    "tire_rotation":         {"en": "Tire rotation",                "it": "Rotazione pneumatici",                 "fr": "Permutation des pneus",                   "de": "Reifenrotation", "pt-PT": "Rotação dos pneus", "pl": "Rotacja opon", "nl": "Banden wisselen", "es": "Rotación de los neumáticos"},
-    "tire_inspect":          {"en": "Tires — pressure & tread",     "it": "Pneumatici — pressione e battistrada", "fr": "Pneus — pression & usure",                "de": "Reifen — Druck & Profil", "pt-PT": "Pneus — pressão e piso", "pl": "Opony — ciśnienie i bieżnik", "nl": "Banden — spanning en profiel", "es": "Neumáticos — presión y dibujo"},
-    "wiper_blades_replace":  {"en": "Wiper blades — replace",       "it": "Spazzole tergicristallo — sostituzione","fr": "Balais d'essuie-glace — remplacer",      "de": "Wischerblätter — wechseln", "pt-PT": "Escovas do limpa-para-brisas — substituição", "pl": "Pióra wycieraczek — wymiana", "nl": "Ruitenwisserbladen — vervangen", "es": "Escobillas del limpiaparabrisas — sustitución"},
-    "wiper_blades_inspect":  {"en": "Wiper blades — check",         "it": "Spazzole tergicristallo — controllo",  "fr": "Balais d'essuie-glace — vérifier",        "de": "Wischerblätter — prüfen", "pt-PT": "Escovas do limpa-para-brisas — verificação", "pl": "Pióra wycieraczek — kontrola", "nl": "Ruitenwisserbladen — controleren", "es": "Escobillas del limpiaparabrisas — comprobación"},
-    "driveshaft_boot_inspect":{"en":"Steering & drive-shaft boots — check","it":"Parapolvere sterzo/trasmissione — controllo","fr":"Soufflets direction & transmission — vérifier","de":"Manschetten Lenkung & Antrieb — prüfen", "pt-PT":"Foles da direção e da transmissão — verificação", "pl": "Osłony układu kierowniczego i napędu — kontrola", "nl": "Stuur- en aandrijfashoezen — controleren", "es": "Fuelles de dirección y transmisión — comprobación"},
-    "battery_pack_inspect":  {"en": "HV battery pack — check",      "it": "Pacco batteria HV — controllo",        "fr": "Batterie HT — vérifier",                  "de": "HV-Batterie — prüfen", "pt-PT": "Bateria de alta tensão — verificação", "pl": "Akumulator wysokiego napięcia — kontrola", "nl": "HV-batterijpakket — controleren", "es": "Batería de alta tensión — comprobación"},
-    "drive_motor_inspect":   {"en": "Drive motor & reducer — check","it": "Motore e riduttore — controllo",       "fr": "Moteur & réducteur — vérifier",           "de": "Antriebsmotor & Reduktor — prüfen", "pt-PT": "Motor de tração e redutor — verificação", "pl": "Silnik napędowy i przekładnia — kontrola", "nl": "Aandrijfmotor en reductiekast — controleren", "es": "Motor de tracción y reductor — comprobación"},
-    "hvac_system_check":     {"en": "A/C system — check",           "it": "Impianto A/C — controllo",             "fr": "Système de clim — vérifier",              "de": "Klimaanlage — prüfen", "pt-PT": "Sistema de A/C — verificação", "pl": "Układ klimatyzacji — kontrola", "nl": "Aircosysteem — controleren", "es": "Sistema de climatización — comprobación"},
-    "charging_port_inspect": {"en": "Charging port — check",        "it": "Presa di ricarica — controllo",        "fr": "Prise de charge — vérifier",              "de": "Ladeanschluss — prüfen", "pt-PT": "Porta de carregamento — verificação", "pl": "Gniazdo ładowania — kontrola", "nl": "Laadpoort — controleren", "es": "Toma de carga — comprobación"},
-    "lights_horn_check":     {"en": "Lights, horn, wipers — check", "it": "Luci, clacson, tergi — controllo",     "fr": "Feux, klaxon, essuie-glaces — vérifier",  "de": "Licht, Hupe, Wischer — prüfen", "pt-PT": "Luzes, cláxon, limpa-para-brisas — verificação", "pl": "Światła, klakson, wycieraczki — kontrola", "nl": "Verlichting, claxon, ruitenwissers — controleren", "es": "Luces, claxon, limpiaparabrisas — comprobación"},
-    "software_update_check": {"en": "Control software — check",     "it": "Software centralina — controllo",      "fr": "Logiciel de commande — vérifier",         "de": "Steuergerät-Software — prüfen", "pt-PT": "Software de controlo — verificação", "pl": "Oprogramowanie sterujące — kontrola", "nl": "Regelsoftware — controleren", "es": "Software de control — comprobación"},
+    "brake_fluid_replace":   {"en": "Brake fluid — replace",        "it": "Liquido freni — sostituzione",        "fr": "Liquide de frein — remplacer",            "de": "Bremsflüssigkeit — wechseln", "pt-PT": "Líquido dos travões — substituição", "pl": "Płyn hamulcowy — wymiana", "nl": "Remvloeistof — vervangen", "es": "Líquido de frenos — sustitución", "cs": "Brzdová kapalina — výměna"},
+    "brake_fluid_inspect":   {"en": "Brake fluid level — check",    "it": "Livello liquido freni — controllo",    "fr": "Niveau de liquide de frein — vérifier",   "de": "Bremsflüssigkeitsstand — prüfen", "pt-PT": "Nível do líquido dos travões — verificação", "pl": "Poziom płynu hamulcowego — kontrola", "nl": "Remvloeistofpeil — controleren", "es": "Nivel del líquido de frenos — comprobación", "cs": "Hladina brzdové kapaliny — kontrola"},
+    "brake_pads_inspect":    {"en": "Brake pads — check",           "it": "Pastiglie freni — controllo",          "fr": "Plaquettes de frein — vérifier",          "de": "Bremsbeläge — prüfen", "pt-PT": "Pastilhas dos travões — verificação", "pl": "Klocki hamulcowe — kontrola", "nl": "Remblokken — controleren", "es": "Pastillas de freno — comprobación", "cs": "Brzdové destičky — kontrola"},
+    "brake_discs_inspect":   {"en": "Brake discs — check",          "it": "Dischi freni — controllo",             "fr": "Disques de frein — vérifier",             "de": "Bremsscheiben — prüfen", "pt-PT": "Discos dos travões — verificação", "pl": "Tarcze hamulcowe — kontrola", "nl": "Remschijven — controleren", "es": "Discos de freno — comprobación", "cs": "Brzdové kotouče — kontrola"},
+    "brake_hoses_inspect":   {"en": "Brake hoses & lines — check",  "it": "Tubi freni — controllo",               "fr": "Durites & conduites de frein — vérifier", "de": "Bremsschläuche & -leitungen — prüfen", "pt-PT": "Tubos e linhas dos travões — verificação", "pl": "Przewody hamulcowe — kontrola", "nl": "Remslangen en -leidingen — controleren", "es": "Latiguillos y tubos de freno — comprobación", "cs": "Brzdové hadice a potrubí — kontrola"},
+    "cabin_filter_replace":  {"en": "Cabin (A/C) filter — replace", "it": "Filtro abitacolo (A/C) — sostituzione","fr": "Filtre d'habitacle (clim) — remplacer",   "de": "Innenraumfilter (Klima) — wechseln", "pt-PT": "Filtro do habitáculo (A/C) — substituição", "pl": "Filtr kabinowy (klimatyzacja) — wymiana", "nl": "Interieurfilter (airco) — vervangen", "es": "Filtro de habitáculo (A/A) — sustitución", "cs": "Kabinový filtr (klimatizace) — výměna"},
+    "coolant_replace":       {"en": "Coolant — replace",            "it": "Refrigerante — sostituzione",          "fr": "Liquide de refroidissement — remplacer",  "de": "Kühlmittel — wechseln", "pt-PT": "Líquido de refrigeração — substituição", "pl": "Płyn chłodniczy — wymiana", "nl": "Koelvloeistof — vervangen", "es": "Líquido refrigerante — sustitución", "cs": "Chladicí kapalina — výměna"},
+    "coolant_inspect":       {"en": "Coolant level — check",        "it": "Livello refrigerante — controllo",     "fr": "Niveau de refroidissement — vérifier",    "de": "Kühlmittelstand — prüfen", "pt-PT": "Nível do líquido de refrigeração — verificação", "pl": "Poziom płynu chłodniczego — kontrola", "nl": "Koelvloeistofpeil — controleren", "es": "Nivel del líquido refrigerante — comprobación", "cs": "Hladina chladicí kapaliny — kontrola"},
+    "reducer_oil_replace":   {"en": "Reducer (gearbox) oil — replace", "it": "Olio riduttore — sostituzione",     "fr": "Huile du réducteur — remplacer",          "de": "Reduktoröl — wechseln", "pt-PT": "Óleo do redutor (caixa) — substituição", "pl": "Olej przekładni — wymiana", "nl": "Olie reductiekast — vervangen", "es": "Aceite del reductor — sustitución", "cs": "Olej v reduktoru (převodovce) — výměna"},
+    "reducer_filter_replace":{"en": "Reducer filter — replace",     "it": "Filtro riduttore — sostituzione",      "fr": "Filtre du réducteur — remplacer",         "de": "Reduktorfilter — wechseln", "pt-PT": "Filtro do redutor — substituição", "pl": "Filtr przekładni — wymiana", "nl": "Filter reductiekast — vervangen", "es": "Filtro del reductor — sustitución", "cs": "Filtr reduktoru — výměna"},
+    "tire_replace":          {"en": "Tires — replace",              "it": "Pneumatici — sostituzione",            "fr": "Pneus — remplacer",                       "de": "Reifen — wechseln", "pt-PT": "Pneus — substituição", "pl": "Opony — wymiana", "nl": "Banden — vervangen", "es": "Neumáticos — sustitución", "cs": "Pneumatiky — výměna"},
+    "tire_rotation":         {"en": "Tire rotation",                "it": "Rotazione pneumatici",                 "fr": "Permutation des pneus",                   "de": "Reifenrotation", "pt-PT": "Rotação dos pneus", "pl": "Rotacja opon", "nl": "Banden wisselen", "es": "Rotación de los neumáticos", "cs": "Přehození pneumatik"},
+    "tire_inspect":          {"en": "Tires — pressure & tread",     "it": "Pneumatici — pressione e battistrada", "fr": "Pneus — pression & usure",                "de": "Reifen — Druck & Profil", "pt-PT": "Pneus — pressão e piso", "pl": "Opony — ciśnienie i bieżnik", "nl": "Banden — spanning en profiel", "es": "Neumáticos — presión y dibujo", "cs": "Pneumatiky — tlak a dezén"},
+    "wiper_blades_replace":  {"en": "Wiper blades — replace",       "it": "Spazzole tergicristallo — sostituzione","fr": "Balais d'essuie-glace — remplacer",      "de": "Wischerblätter — wechseln", "pt-PT": "Escovas do limpa-para-brisas — substituição", "pl": "Pióra wycieraczek — wymiana", "nl": "Ruitenwisserbladen — vervangen", "es": "Escobillas del limpiaparabrisas — sustitución", "cs": "Stírací lišty — výměna"},
+    "wiper_blades_inspect":  {"en": "Wiper blades — check",         "it": "Spazzole tergicristallo — controllo",  "fr": "Balais d'essuie-glace — vérifier",        "de": "Wischerblätter — prüfen", "pt-PT": "Escovas do limpa-para-brisas — verificação", "pl": "Pióra wycieraczek — kontrola", "nl": "Ruitenwisserbladen — controleren", "es": "Escobillas del limpiaparabrisas — comprobación", "cs": "Stírací lišty — kontrola"},
+    "driveshaft_boot_inspect":{"en":"Steering & drive-shaft boots — check","it":"Parapolvere sterzo/trasmissione — controllo","fr":"Soufflets direction & transmission — vérifier","de":"Manschetten Lenkung & Antrieb — prüfen", "pt-PT":"Foles da direção e da transmissão — verificação", "pl": "Osłony układu kierowniczego i napędu — kontrola", "nl": "Stuur- en aandrijfashoezen — controleren", "es": "Fuelles de dirección y transmisión — comprobación", "cs": "Manžety řízení a hnacích hřídelí — kontrola"},
+    "battery_pack_inspect":  {"en": "HV battery pack — check",      "it": "Pacco batteria HV — controllo",        "fr": "Batterie HT — vérifier",                  "de": "HV-Batterie — prüfen", "pt-PT": "Bateria de alta tensão — verificação", "pl": "Akumulator wysokiego napięcia — kontrola", "nl": "HV-batterijpakket — controleren", "es": "Batería de alta tensión — comprobación", "cs": "Vysokonapěťová baterie — kontrola"},
+    "drive_motor_inspect":   {"en": "Drive motor & reducer — check","it": "Motore e riduttore — controllo",       "fr": "Moteur & réducteur — vérifier",           "de": "Antriebsmotor & Reduktor — prüfen", "pt-PT": "Motor de tração e redutor — verificação", "pl": "Silnik napędowy i przekładnia — kontrola", "nl": "Aandrijfmotor en reductiekast — controleren", "es": "Motor de tracción y reductor — comprobación", "cs": "Trakční motor a reduktor — kontrola"},
+    "hvac_system_check":     {"en": "A/C system — check",           "it": "Impianto A/C — controllo",             "fr": "Système de clim — vérifier",              "de": "Klimaanlage — prüfen", "pt-PT": "Sistema de A/C — verificação", "pl": "Układ klimatyzacji — kontrola", "nl": "Aircosysteem — controleren", "es": "Sistema de climatización — comprobación", "cs": "Klimatizace — kontrola"},
+    "charging_port_inspect": {"en": "Charging port — check",        "it": "Presa di ricarica — controllo",        "fr": "Prise de charge — vérifier",              "de": "Ladeanschluss — prüfen", "pt-PT": "Porta de carregamento — verificação", "pl": "Gniazdo ładowania — kontrola", "nl": "Laadpoort — controleren", "es": "Toma de carga — comprobación", "cs": "Nabíjecí zásuvka — kontrola"},
+    "lights_horn_check":     {"en": "Lights, horn, wipers — check", "it": "Luci, clacson, tergi — controllo",     "fr": "Feux, klaxon, essuie-glaces — vérifier",  "de": "Licht, Hupe, Wischer — prüfen", "pt-PT": "Luzes, cláxon, limpa-para-brisas — verificação", "pl": "Światła, klakson, wycieraczki — kontrola", "nl": "Verlichting, claxon, ruitenwissers — controleren", "es": "Luces, claxon, limpiaparabrisas — comprobación", "cs": "Světla, houkačka, stěrače — kontrola"},
+    "software_update_check": {"en": "Control software — check",     "it": "Software centralina — controllo",      "fr": "Logiciel de commande — vérifier",         "de": "Steuergerät-Software — prüfen", "pt-PT": "Software de controlo — verificação", "pl": "Oprogramowanie sterujące — kontrola", "nl": "Regelsoftware — controleren", "es": "Software de control — comprobación", "cs": "Řídicí software — kontrola"},
 }
 _CATS = {
-    "brakes":     {"en": "Brakes",      "it": "Freni",        "fr": "Freins",          "de": "Bremsen",  "pt-PT": "Travões", "pl": "Hamulce", "nl": "Remmen", "es": "Frenos", "icon": "🛑"},
-    "tires":      {"en": "Tires",       "it": "Pneumatici",   "fr": "Pneus",           "de": "Reifen",   "pt-PT": "Pneus", "pl": "Opony", "nl": "Banden", "es": "Neumáticos", "icon": "🛞"},
-    "drivetrain": {"en": "Drivetrain",  "it": "Trasmissione", "fr": "Transmission",    "de": "Antrieb",  "pt-PT": "Transmissão", "pl": "Układ napędowy", "nl": "Aandrijflijn", "es": "Transmisión", "icon": "⚙️"},
-    "climate":    {"en": "Climate",     "it": "Clima",        "fr": "Climatisation",   "de": "Klima",    "pt-PT": "Climatização", "pl": "Klimatyzacja", "nl": "Klimaat", "es": "Climatización", "icon": "❄️"},
-    "cooling":    {"en": "Cooling",     "it": "Raffreddamento","fr": "Refroidissement", "de": "Kühlung", "pt-PT": "Arrefecimento", "pl": "Chłodzenie", "nl": "Koeling", "es": "Refrigeración", "icon": "💧"},
-    "battery":    {"en": "Battery",     "it": "Batteria",     "fr": "Batterie",        "de": "Batterie", "pt-PT": "Bateria", "pl": "Akumulator", "nl": "Batterij", "es": "Batería", "icon": "🔋"},
-    "electrical": {"en": "Electrical",  "it": "Elettrico",    "fr": "Électrique",      "de": "Elektrik", "pt-PT": "Elétrico", "pl": "Elektryka", "nl": "Elektrisch", "es": "Sistema eléctrico", "icon": "💡"},
-    "exterior":   {"en": "Exterior",    "it": "Esterno",      "fr": "Extérieur",       "de": "Außen",    "pt-PT": "Exterior", "pl": "Nadwozie", "nl": "Buitenzijde", "es": "Exterior", "icon": "🪟"},
+    "brakes":     {"en": "Brakes",      "it": "Freni",        "fr": "Freins",          "de": "Bremsen",  "pt-PT": "Travões", "pl": "Hamulce", "nl": "Remmen", "es": "Frenos", "cs": "Brzdy", "icon": "🛑"},
+    "tires":      {"en": "Tires",       "it": "Pneumatici",   "fr": "Pneus",           "de": "Reifen",   "pt-PT": "Pneus", "pl": "Opony", "nl": "Banden", "es": "Neumáticos", "cs": "Pneumatiky", "icon": "🛞"},
+    "drivetrain": {"en": "Drivetrain",  "it": "Trasmissione", "fr": "Transmission",    "de": "Antrieb",  "pt-PT": "Transmissão", "pl": "Układ napędowy", "nl": "Aandrijflijn", "es": "Transmisión", "cs": "Pohon", "icon": "⚙️"},
+    "climate":    {"en": "Climate",     "it": "Clima",        "fr": "Climatisation",   "de": "Klima",    "pt-PT": "Climatização", "pl": "Klimatyzacja", "nl": "Klimaat", "es": "Climatización", "cs": "Klimatizace", "icon": "❄️"},
+    "cooling":    {"en": "Cooling",     "it": "Raffreddamento","fr": "Refroidissement", "de": "Kühlung", "pt-PT": "Arrefecimento", "pl": "Chłodzenie", "nl": "Koeling", "es": "Refrigeración", "cs": "Chlazení", "icon": "💧"},
+    "battery":    {"en": "Battery",     "it": "Batteria",     "fr": "Batterie",        "de": "Batterie", "pt-PT": "Bateria", "pl": "Akumulator", "nl": "Batterij", "es": "Batería", "cs": "Baterie", "icon": "🔋"},
+    "electrical": {"en": "Electrical",  "it": "Elettrico",    "fr": "Électrique",      "de": "Elektrik", "pt-PT": "Elétrico", "pl": "Elektryka", "nl": "Elektrisch", "es": "Sistema eléctrico", "cs": "Elektroinstalace", "icon": "💡"},
+    "exterior":   {"en": "Exterior",    "it": "Esterno",      "fr": "Extérieur",       "de": "Außen",    "pt-PT": "Exterior", "pl": "Nadwozie", "nl": "Buitenzijde", "es": "Exterior", "cs": "Exteriér", "icon": "🪟"},
 }
 _CHROME = {
-    "title":        {"en": "Maintenance",            "it": "Manutenzione", "fr": "Entretien", "de": "Wartung", "pt-PT": "Manutenção", "pl": "Serwis", "nl": "Onderhoud", "es": "Mantenimiento"},
-    "subtitle":     {"en": "Factory service schedule from your car's official manual", "it": "Programma di manutenzione ufficiale dal manuale della tua auto", "fr": "Programme d'entretien officiel issu du manuel de votre voiture", "de": "Werks-Wartungsplan aus dem offiziellen Handbuch Ihres Autos", "pt-PT": "Plano de manutenção de fábrica com base no manual oficial do seu carro", "pl": "Fabryczny plan przeglądów z oficjalnej instrukcji Twojego samochodu", "nl": "Fabrieksonderhoudsschema uit het officiële handboek van je auto", "es": "Plan de mantenimiento de fábrica, tomado del manual oficial de tu coche"},
-    "odometer":     {"en": "Odometer",               "it": "Contachilometri", "fr": "Compteur", "de": "Kilometerstand", "pt-PT": "Odómetro", "pl": "Przebieg", "nl": "Kilometerstand", "es": "Cuentakilómetros"},
-    "overdue":      {"en": "Overdue",                "it": "Scaduti", "fr": "En retard", "de": "Überfällig", "pt-PT": "Em atraso", "pl": "Po terminie", "nl": "Te laat", "es": "Vencidos"},
-    "soon":         {"en": "Due soon",               "it": "In scadenza", "fr": "Bientôt dû", "de": "Bald fällig", "pt-PT": "Em breve", "pl": "Wkrótce", "nl": "Binnenkort", "es": "Próximos"},
-    "ok":           {"en": "Up to date",             "it": "In regola", "fr": "À jour", "de": "Aktuell", "pt-PT": "Em dia", "pl": "Aktualne", "nl": "Op orde", "es": "Al día"},
-    "log_btn":      {"en": "Log",                    "it": "Registra", "fr": "Enregistrer", "de": "Eintragen", "pt-PT": "Registar", "pl": "Zapisz", "nl": "Vastleggen", "es": "Registrar"},
-    "log_done":     {"en": "Mark this service as done", "it": "Registra questo intervento", "fr": "Marquer cet entretien comme fait", "de": "Diesen Service als erledigt markieren", "pt-PT": "Marcar este serviço como concluído", "pl": "Oznacz ten przegląd jako wykonany", "nl": "Deze onderhoudsbeurt als gedaan markeren", "es": "Marcar esta operación como hecha"},
-    "date":         {"en": "Date",                   "it": "Data", "fr": "Date", "de": "Datum", "pt-PT": "Data", "pl": "Data", "nl": "Datum", "es": "Fecha"},
-    "note":         {"en": "Note (optional)",        "it": "Nota (opzionale)", "fr": "Note (facultatif)", "de": "Notiz (optional)", "pt-PT": "Nota (opcional)", "pl": "Notatka (opcjonalnie)", "nl": "Notitie (optioneel)", "es": "Nota (opcional)"},
-    "save":         {"en": "Save",                   "it": "Salva", "fr": "Enregistrer", "de": "Speichern", "pt-PT": "Guardar", "pl": "Zapisz", "nl": "Opslaan", "es": "Guardar"},
-    "cancel":       {"en": "Cancel",                 "it": "Annulla", "fr": "Annuler", "de": "Abbrechen", "pt-PT": "Cancelar", "pl": "Anuluj", "nl": "Annuleren", "es": "Cancelar"},
-    "last":         {"en": "Last",                   "it": "Ultimo", "fr": "Dernier", "de": "Zuletzt", "pt-PT": "Último", "pl": "Ostatnio", "nl": "Laatst", "es": "Última"},
-    "never":        {"en": "Never logged",           "it": "Mai registrato", "fr": "Jamais enregistré", "de": "Nie eingetragen", "pt-PT": "Nunca registado", "pl": "Nigdy nie zapisano", "nl": "Nooit vastgelegd", "es": "Nunca registrada"},
-    "from_delivery":{"en": "since delivery",         "it": "dalla consegna", "fr": "depuis la livraison", "de": "seit Übergabe", "pt-PT": "desde a entrega", "pl": "od odbioru", "nl": "sinds aflevering", "es": "desde la entrega"},
-    "interval":     {"en": "interval",               "it": "intervallo", "fr": "intervalle", "de": "Intervall", "pt-PT": "intervalo", "pl": "interwał", "nl": "interval", "es": "intervalo"},
-    "no_pack_title":{"en": "Schedule not available for this model yet", "it": "Programma non ancora disponibile per questo modello", "fr": "Programme pas encore disponible pour ce modèle", "de": "Plan für dieses Modell noch nicht verfügbar", "pt-PT": "Plano ainda não disponível para este modelo", "pl": "Plan niedostępny jeszcze dla tego modelu", "nl": "Schema nog niet beschikbaar voor dit model", "es": "Todavía no hay plan disponible para este modelo"},
-    "no_pack_body": {"en": "Mate ships validated BEV schedules for T03, B05, B10 and C10.", "it": "Mate include programmi BEV validati per T03, B05, B10 e C10.", "fr": "Mate fournit des programmes BEV validés pour T03, B05, B10 et C10.", "de": "Mate liefert validierte BEV-Pläne für T03, B05, B10 und C10.", "pt-PT": "O Mate disponibiliza planos BEV validados para T03, B05, B10 e C10.", "pl": "Mate zawiera zweryfikowane plany BEV dla T03, B05, B10 i C10.", "nl": "Mate levert gecontroleerde BEV-schema's voor T03, B05, B10 en C10.", "es": "Mate incluye planes BEV validados para el T03, el B05, el B10 y el C10."},
-    "provisional":  {"en": "Provisional schedule — to confirm against this model's manual.", "it": "Programma provvisorio — da confermare sul manuale di questo modello.", "fr": "Programme provisoire — à confirmer avec le manuel de ce modèle.", "de": "Vorläufiger Plan — anhand des Handbuchs dieses Modells zu bestätigen.", "pt-PT": "Plano provisório — a confirmar no manual deste modelo.", "pl": "Plan wstępny — do potwierdzenia w instrukcji tego modelu.", "nl": "Voorlopig schema — te bevestigen aan de hand van het handboek van dit model.", "es": "Plan provisional — por confirmar con el manual de este modelo."},
-    "baseline_q":   {"en": "When did you take delivery of the car?", "it": "Quando hai ritirato l'auto?", "fr": "Quand avez-vous pris livraison de la voiture ?", "de": "Wann haben Sie das Auto übernommen?", "pt-PT": "Quando recebeu o carro?", "pl": "Kiedy samochód został odebrany?", "nl": "Wanneer heb je de auto opgehaald?", "es": "¿Cuándo recogiste el coche?"},
-    "baseline_hint":{"en": "Set the registration/delivery date so first-service due dates are accurate.", "it": "Imposta la data di immatricolazione/consegna per scadenze del primo tagliando accurate.", "fr": "Indiquez la date d'immatriculation/livraison pour des échéances de premier entretien exactes.", "de": "Geben Sie das Zulassungs-/Übergabedatum an, damit die ersten Service-Termine stimmen.", "pt-PT": "Defina a data de matrícula/entrega para que as datas da primeira revisão sejam precisas.", "pl": "Ustaw datę rejestracji/odbioru, aby terminy pierwszego przeglądu były dokładne.", "nl": "Stel de datum van registratie/aflevering in, zodat de termijnen van de eerste beurt kloppen.", "es": "Indica la fecha de matriculación o de entrega para que los plazos de la primera revisión sean exactos."},
-    "baseline_save":{"en": "Set delivery date", "it": "Imposta data consegna", "fr": "Définir la date de livraison", "de": "Übergabedatum festlegen", "pt-PT": "Definir data de entrega", "pl": "Ustaw datę odbioru", "nl": "Afleverdatum instellen", "es": "Fijar la fecha de entrega"},
-    "baseline_set": {"en": "Delivery", "it": "Consegna", "fr": "Livraison", "de": "Übergabe", "pt-PT": "Entrega", "pl": "Odbiór", "nl": "Aflevering", "es": "Entrega"},
-    "baseline_edit":{"en": "edit", "it": "modifica", "fr": "modifier", "de": "ändern", "pt-PT": "editar", "pl": "zmień", "nl": "wijzigen", "es": "cambiar"},
-    "baseline_km":  {"en": "Odometer at delivery (km)", "it": "Odometro alla consegna (km)", "fr": "Compteur à la livraison (km)", "de": "Kilometerstand bei Übergabe (km)", "pt-PT": "Odómetro na entrega (km)", "pl": "Przebieg przy odbiorze (km)", "nl": "Kilometerstand bij aflevering (km)", "es": "Cuentakilómetros en la entrega (km)"},
-    "baseline_km_hint": {"en": "0 if the car was new — so first-service bars start from the real odometer.", "it": "0 se l'auto era nuova — così le barre del primo tagliando partono dall'odometro reale.", "fr": "0 si la voiture était neuve — pour que les barres du premier entretien partent du vrai compteur.", "de": "0, wenn das Auto neu war — damit die Balken des ersten Service vom echten Kilometerstand ausgehen.", "pt-PT": "0 se o carro era novo — para que as barras da primeira revisão partam do odómetro real.", "pl": "0, jeśli samochód był nowy — aby paski pierwszego przeglądu startowały od rzeczywistego przebiegu.", "nl": "0 als de auto nieuw was — zodat de balken van de eerste beurt vanaf de echte kilometerstand beginnen.", "es": "0 si el coche era nuevo — así las barras de la primera revisión parten del cuentakilómetros real."},
-    "all_good":     {"en": "Everything is up to date.", "it": "È tutto in regola.", "fr": "Tout est à jour.", "de": "Alles ist aktuell.", "pt-PT": "Está tudo em dia.", "pl": "Wszystko jest aktualne.", "nl": "Alles is op orde.", "es": "Está todo al día."},
-    "next_first":   {"en": "First service", "it": "Primo tagliando", "fr": "Premier entretien", "de": "Erster Service", "pt-PT": "Primeira revisão", "pl": "Pierwszy przegląd", "nl": "Eerste onderhoudsbeurt", "es": "Primera revisión"},
-    "st_overdue":   {"en": "Overdue",   "it": "Scaduto", "fr": "En retard", "de": "Überfällig", "pt-PT": "Em atraso", "pl": "Po terminie", "nl": "Te laat", "es": "Vencida"},
-    "st_soon":      {"en": "Due soon",  "it": "In scadenza", "fr": "Bientôt", "de": "Bald", "pt-PT": "Em breve", "pl": "Wkrótce", "nl": "Binnenkort", "es": "Próxima"},
-    "st_ok":        {"en": "OK",        "it": "In regola", "fr": "OK", "de": "OK", "pt-PT": "OK", "pl": "OK", "nl": "OK", "es": "OK"},
-    "bar_time":     {"en": "time",      "it": "tempo", "fr": "temps", "de": "Zeit", "pt-PT": "tempo", "pl": "czas", "nl": "tijd", "es": "tiempo"},
+    "title":        {"en": "Maintenance",            "it": "Manutenzione", "fr": "Entretien", "de": "Wartung", "pt-PT": "Manutenção", "pl": "Serwis", "nl": "Onderhoud", "es": "Mantenimiento", "cs": "Údržba"},
+    "subtitle":     {"en": "Factory service schedule from your car's official manual", "it": "Programma di manutenzione ufficiale dal manuale della tua auto", "fr": "Programme d'entretien officiel issu du manuel de votre voiture", "de": "Werks-Wartungsplan aus dem offiziellen Handbuch Ihres Autos", "pt-PT": "Plano de manutenção de fábrica com base no manual oficial do seu carro", "pl": "Fabryczny plan przeglądów z oficjalnej instrukcji Twojego samochodu", "nl": "Fabrieksonderhoudsschema uit het officiële handboek van je auto", "es": "Plan de mantenimiento de fábrica, tomado del manual oficial de tu coche", "cs": "Tovární servisní plán z oficiálního návodu k vašemu autu"},
+    "odometer":     {"en": "Odometer",               "it": "Contachilometri", "fr": "Compteur", "de": "Kilometerstand", "pt-PT": "Odómetro", "pl": "Przebieg", "nl": "Kilometerstand", "es": "Cuentakilómetros", "cs": "Stav tachometru"},
+    "overdue":      {"en": "Overdue",                "it": "Scaduti", "fr": "En retard", "de": "Überfällig", "pt-PT": "Em atraso", "pl": "Po terminie", "nl": "Te laat", "es": "Vencidos", "cs": "Po termínu"},
+    "soon":         {"en": "Due soon",               "it": "In scadenza", "fr": "Bientôt dû", "de": "Bald fällig", "pt-PT": "Em breve", "pl": "Wkrótce", "nl": "Binnenkort", "es": "Próximos", "cs": "Brzy na řadě"},
+    "ok":           {"en": "Up to date",             "it": "In regola", "fr": "À jour", "de": "Aktuell", "pt-PT": "Em dia", "pl": "Aktualne", "nl": "Op orde", "es": "Al día", "cs": "V pořádku"},
+    "log_btn":      {"en": "Log",                    "it": "Registra", "fr": "Enregistrer", "de": "Eintragen", "pt-PT": "Registar", "pl": "Zapisz", "nl": "Vastleggen", "es": "Registrar", "cs": "Zapsat"},
+    "log_done":     {"en": "Mark this service as done", "it": "Registra questo intervento", "fr": "Marquer cet entretien comme fait", "de": "Diesen Service als erledigt markieren", "pt-PT": "Marcar este serviço como concluído", "pl": "Oznacz ten przegląd jako wykonany", "nl": "Deze onderhoudsbeurt als gedaan markeren", "es": "Marcar esta operación como hecha", "cs": "Označit tento servis jako provedený"},
+    "date":         {"en": "Date",                   "it": "Data", "fr": "Date", "de": "Datum", "pt-PT": "Data", "pl": "Data", "nl": "Datum", "es": "Fecha", "cs": "Datum"},
+    "note":         {"en": "Note (optional)",        "it": "Nota (opzionale)", "fr": "Note (facultatif)", "de": "Notiz (optional)", "pt-PT": "Nota (opcional)", "pl": "Notatka (opcjonalnie)", "nl": "Notitie (optioneel)", "es": "Nota (opcional)", "cs": "Poznámka (nepovinné)"},
+    "save":         {"en": "Save",                   "it": "Salva", "fr": "Enregistrer", "de": "Speichern", "pt-PT": "Guardar", "pl": "Zapisz", "nl": "Opslaan", "es": "Guardar", "cs": "Uložit"},
+    "cancel":       {"en": "Cancel",                 "it": "Annulla", "fr": "Annuler", "de": "Abbrechen", "pt-PT": "Cancelar", "pl": "Anuluj", "nl": "Annuleren", "es": "Cancelar", "cs": "Zrušit"},
+    "last":         {"en": "Last",                   "it": "Ultimo", "fr": "Dernier", "de": "Zuletzt", "pt-PT": "Último", "pl": "Ostatnio", "nl": "Laatst", "es": "Última", "cs": "Naposledy"},
+    "never":        {"en": "Never logged",           "it": "Mai registrato", "fr": "Jamais enregistré", "de": "Nie eingetragen", "pt-PT": "Nunca registado", "pl": "Nigdy nie zapisano", "nl": "Nooit vastgelegd", "es": "Nunca registrada", "cs": "Dosud nezapsáno"},
+    "from_delivery":{"en": "since delivery",         "it": "dalla consegna", "fr": "depuis la livraison", "de": "seit Übergabe", "pt-PT": "desde a entrega", "pl": "od odbioru", "nl": "sinds aflevering", "es": "desde la entrega", "cs": "od převzetí"},
+    "interval":     {"en": "interval",               "it": "intervallo", "fr": "intervalle", "de": "Intervall", "pt-PT": "intervalo", "pl": "interwał", "nl": "interval", "es": "intervalo", "cs": "interval"},
+    "no_pack_title":{"en": "Schedule not available for this model yet", "it": "Programma non ancora disponibile per questo modello", "fr": "Programme pas encore disponible pour ce modèle", "de": "Plan für dieses Modell noch nicht verfügbar", "pt-PT": "Plano ainda não disponível para este modelo", "pl": "Plan niedostępny jeszcze dla tego modelu", "nl": "Schema nog niet beschikbaar voor dit model", "es": "Todavía no hay plan disponible para este modelo", "cs": "Plán pro tento model zatím není k dispozici"},
+    "no_pack_body": {"en": "Mate ships validated BEV schedules for T03, B05, B10 and C10.", "it": "Mate include programmi BEV validati per T03, B05, B10 e C10.", "fr": "Mate fournit des programmes BEV validés pour T03, B05, B10 et C10.", "de": "Mate liefert validierte BEV-Pläne für T03, B05, B10 und C10.", "pt-PT": "O Mate disponibiliza planos BEV validados para T03, B05, B10 e C10.", "pl": "Mate zawiera zweryfikowane plany BEV dla T03, B05, B10 i C10.", "nl": "Mate levert gecontroleerde BEV-schema's voor T03, B05, B10 en C10.", "es": "Mate incluye planes BEV validados para el T03, el B05, el B10 y el C10.", "cs": "Mate obsahuje ověřené plány BEV pro T03, B05, B10 a C10."},
+    "provisional":  {"en": "Provisional schedule — to confirm against this model's manual.", "it": "Programma provvisorio — da confermare sul manuale di questo modello.", "fr": "Programme provisoire — à confirmer avec le manuel de ce modèle.", "de": "Vorläufiger Plan — anhand des Handbuchs dieses Modells zu bestätigen.", "pt-PT": "Plano provisório — a confirmar no manual deste modelo.", "pl": "Plan wstępny — do potwierdzenia w instrukcji tego modelu.", "nl": "Voorlopig schema — te bevestigen aan de hand van het handboek van dit model.", "es": "Plan provisional — por confirmar con el manual de este modelo.", "cs": "Předběžný plán — je třeba ho ověřit v návodu k tomuto modelu."},
+    "baseline_q":   {"en": "When did you take delivery of the car?", "it": "Quando hai ritirato l'auto?", "fr": "Quand avez-vous pris livraison de la voiture ?", "de": "Wann haben Sie das Auto übernommen?", "pt-PT": "Quando recebeu o carro?", "pl": "Kiedy samochód został odebrany?", "nl": "Wanneer heb je de auto opgehaald?", "es": "¿Cuándo recogiste el coche?", "cs": "Kdy jste auto převzali?"},
+    "baseline_hint":{"en": "Set the registration/delivery date so first-service due dates are accurate.", "it": "Imposta la data di immatricolazione/consegna per scadenze del primo tagliando accurate.", "fr": "Indiquez la date d'immatriculation/livraison pour des échéances de premier entretien exactes.", "de": "Geben Sie das Zulassungs-/Übergabedatum an, damit die ersten Service-Termine stimmen.", "pt-PT": "Defina a data de matrícula/entrega para que as datas da primeira revisão sejam precisas.", "pl": "Ustaw datę rejestracji/odbioru, aby terminy pierwszego przeglądu były dokładne.", "nl": "Stel de datum van registratie/aflevering in, zodat de termijnen van de eerste beurt kloppen.", "es": "Indica la fecha de matriculación o de entrega para que los plazos de la primera revisión sean exactos.", "cs": "Nastavte datum registrace/převzetí, aby termíny prvního servisu byly přesné."},
+    "baseline_save":{"en": "Set delivery date", "it": "Imposta data consegna", "fr": "Définir la date de livraison", "de": "Übergabedatum festlegen", "pt-PT": "Definir data de entrega", "pl": "Ustaw datę odbioru", "nl": "Afleverdatum instellen", "es": "Fijar la fecha de entrega", "cs": "Nastavit datum převzetí"},
+    "baseline_set": {"en": "Delivery", "it": "Consegna", "fr": "Livraison", "de": "Übergabe", "pt-PT": "Entrega", "pl": "Odbiór", "nl": "Aflevering", "es": "Entrega", "cs": "Převzetí"},
+    "baseline_edit":{"en": "edit", "it": "modifica", "fr": "modifier", "de": "ändern", "pt-PT": "editar", "pl": "zmień", "nl": "wijzigen", "es": "cambiar", "cs": "upravit"},
+    "baseline_km":  {"en": "Odometer at delivery (km)", "it": "Odometro alla consegna (km)", "fr": "Compteur à la livraison (km)", "de": "Kilometerstand bei Übergabe (km)", "pt-PT": "Odómetro na entrega (km)", "pl": "Przebieg przy odbiorze (km)", "nl": "Kilometerstand bij aflevering (km)", "es": "Cuentakilómetros en la entrega (km)", "cs": "Stav tachometru při převzetí (km)"},
+    "baseline_km_hint": {"en": "0 if the car was new — so first-service bars start from the real odometer.", "it": "0 se l'auto era nuova — così le barre del primo tagliando partono dall'odometro reale.", "fr": "0 si la voiture était neuve — pour que les barres du premier entretien partent du vrai compteur.", "de": "0, wenn das Auto neu war — damit die Balken des ersten Service vom echten Kilometerstand ausgehen.", "pt-PT": "0 se o carro era novo — para que as barras da primeira revisão partam do odómetro real.", "pl": "0, jeśli samochód był nowy — aby paski pierwszego przeglądu startowały od rzeczywistego przebiegu.", "nl": "0 als de auto nieuw was — zodat de balken van de eerste beurt vanaf de echte kilometerstand beginnen.", "es": "0 si el coche era nuevo — así las barras de la primera revisión parten del cuentakilómetros real.", "cs": "0, pokud bylo auto nové — pruhy prvního servisu pak vycházejí ze skutečného stavu tachometru."},
+    "all_good":     {"en": "Everything is up to date.", "it": "È tutto in regola.", "fr": "Tout est à jour.", "de": "Alles ist aktuell.", "pt-PT": "Está tudo em dia.", "pl": "Wszystko jest aktualne.", "nl": "Alles is op orde.", "es": "Está todo al día.", "cs": "Vše je v pořádku."},
+    "next_first":   {"en": "First service", "it": "Primo tagliando", "fr": "Premier entretien", "de": "Erster Service", "pt-PT": "Primeira revisão", "pl": "Pierwszy przegląd", "nl": "Eerste onderhoudsbeurt", "es": "Primera revisión", "cs": "První servis"},
+    "st_overdue":   {"en": "Overdue",   "it": "Scaduto", "fr": "En retard", "de": "Überfällig", "pt-PT": "Em atraso", "pl": "Po terminie", "nl": "Te laat", "es": "Vencida", "cs": "Po termínu"},
+    "st_soon":      {"en": "Due soon",  "it": "In scadenza", "fr": "Bientôt", "de": "Bald", "pt-PT": "Em breve", "pl": "Wkrótce", "nl": "Binnenkort", "es": "Próxima", "cs": "Brzy"},
+    "st_ok":        {"en": "OK",        "it": "In regola", "fr": "OK", "de": "OK", "pt-PT": "OK", "pl": "OK", "nl": "OK", "es": "OK", "cs": "OK"},
+    "bar_time":     {"en": "time",      "it": "tempo", "fr": "temps", "de": "Zeit", "pt-PT": "tempo", "pl": "czas", "nl": "tijd", "es": "tiempo", "cs": "čas"},
 }
 
 
@@ -223,6 +223,116 @@ def set_baseline(date_iso: str, km: Optional[float]) -> None:
         db_reader.set_setting(_key("maint_baseline_km"), str(km))
 
 
+# ── Summer and winter tyres (D#493) ───────────────────────────────────────────
+# Two days the user chooses, "MM-DD", repeated every year: winter tyres go on, summer tyres go on.
+# Off unless switched on, and per car, like the start of service above.
+def _month_day(s: str) -> Optional[tuple]:
+    """'MM-DD' → (month, day) when that day exists in EVERY year (no 29 February), else None."""
+    try:
+        m, d = (int(x) for x in str(s).split("-"))
+        date(2001, m, d)          # 2001 is not a leap year
+        return m, d
+    except (ValueError, TypeError):
+        return None
+
+
+def get_tyre_seasons() -> tuple:
+    """(enabled, winter 'MM-DD', summer 'MM-DD') of the selected car."""
+    return (db_reader.get_setting(_key("tyre_seasons_enabled"), "") == "1",
+            db_reader.get_setting(_key("tyre_winter_on"), ""),
+            db_reader.get_setting(_key("tyre_summer_on"), ""))
+
+
+def set_tyre_seasons(enabled: bool, winter: str, summer: str) -> Optional[str]:
+    """Save the switch and the two days. Returns None, or the reason nothing was saved:
+    switched on, both days must exist every year and differ."""
+    winter, summer = (winter or "").strip(), (summer or "").strip()
+    w, s = _month_day(winter), _month_day(summer)
+    if enabled and (w is None or s is None):
+        return "tyre_seasons_need_days"
+    if enabled and w == s:
+        return "tyre_seasons_same_day"
+    if w is not None:
+        db_reader.set_setting(_key("tyre_winter_on"), f"{w[0]:02d}-{w[1]:02d}")
+    if s is not None:
+        db_reader.set_setting(_key("tyre_summer_on"), f"{s[0]:02d}-{s[1]:02d}")
+    db_reader.set_setting(_key("tyre_seasons_enabled"), "1" if enabled else "0")
+    return None
+
+
+def _season_on(day: date, w: tuple, s: tuple) -> tuple:
+    """The set on the car on `day` and the day it went on: the later of the last winter day and the
+    last summer day not after `day`."""
+    def last(md):
+        d = date(day.year, *md)
+        return d if d <= day else date(day.year - 1, *md)
+    lw, ls = last(w), last(s)
+    return ("winter", lw) if lw >= ls else ("summer", ls)
+
+
+def tyre_seasons(vehicle_id: Optional[int], today: date) -> Optional[dict]:
+    """The tyre card of the Maintenance page, or None when the switch is off or a day is missing.
+
+    The odometer's last reading of each local day; the distance from one day with a reading to the
+    next goes to the set on the car on the later day — a gap is not estimated, it lands on the day
+    the next reading arrives. An odometer that goes back adds nothing. No reading at all → None
+    kilometres, not 0."""
+    enabled, winter, summer = get_tyre_seasons()
+    w, s = _month_day(winter), _month_day(summer)
+    if not enabled or w is None or s is None or w == s:
+        return None
+    current, since = _season_on(today, w, s)
+    out = {"current": current, "since": since.isoformat(), "data_from": None,
+           "season_km": None, "winter_km": None, "summer_km": None}
+    if vehicle_id is None:
+        return out
+    rows = db_reader._get().execute(
+        "SELECT substr(recorded_at, 1, 13) AS h, MAX(recorded_at) AS t, MAX(odometer_km) AS o "
+        "FROM positions WHERE vehicle_id = ? AND odometer_km IS NOT NULL AND odometer_km > 0 "
+        "GROUP BY h ORDER BY h", (vehicle_id,)).fetchall()
+    tz = db_reader._local_tz()
+    daily: dict = {}
+    for r in rows:
+        dt = db_reader._local_dt(r["t"], tz)
+        if dt is None:
+            continue
+        d = dt.date()
+        daily[d] = max(daily.get(d, 0.0), float(r["o"]))
+    if not daily:
+        return out
+    km = {"winter": 0.0, "summer": 0.0}
+    season_km = 0.0
+    top = None
+    for d in sorted(daily):
+        o = daily[d]
+        if top is not None and o > top:
+            km[_season_on(d, w, s)[0]] += o - top
+            if since <= d <= today:
+                season_km += o - top
+        top = o if top is None else max(top, o)
+    out.update(data_from=min(daily).isoformat(), season_km=round(season_km),
+               winter_km=round(km["winter"]), summer_km=round(km["summer"]))
+    return out
+
+
+def tyre_view(vehicle_id: Optional[int], lang: str) -> Optional[dict]:
+    """tyre_seasons() of today, with the dates and distances as the page shows them."""
+    import i18n
+    s = tyre_seasons(vehicle_id, datetime.now().date())
+    if s is None:
+        return None
+    system = units.get_unit_system()
+
+    def day(iso):
+        return i18n.fmt_day_month_year(lang, date.fromisoformat(iso)) if iso else None
+
+    def dist(km):
+        return _dist(km, lang, system) if km is not None else None
+    return {**s, "since_disp": day(s["since"]), "data_from_disp": day(s["data_from"]),
+            "season_disp": dist(s["season_km"]), "winter_disp": dist(s["winter_km"]),
+            "summer_disp": dist(s["summer_km"])}
+
+
 # ── Formatting helpers (distance respects the user's unit system) ─────────────
 def _grp(n, lang: str) -> str:
     s = f"{int(round(n)):,}"
@@ -273,6 +383,10 @@ _P = {
            "yN": "{n} jaar", "y1": "1 jaar", "moN": "{n} maanden", "mo1": "1 maand", "dN": "{n} dagen", "d1": "1 dag"},
     "es": {"first": "Primera revisión: dentro de ", "in_": "Dentro de ", "overdue": "Vencida desde hace ", "every": "cada ", "or": " o ",
            "yN": "{n} años", "y1": "1 año", "moN": "{n} meses", "mo1": "1 mes", "dN": "{n} días", "d1": "1 día"},
+    # Czech inflects with the count too (2 roky / 5 let); every fragment is followed by an accusative
+    # after "za"/"o", and abbreviated units read correctly for any n.
+    "cs": {"first": "První servis: za ", "in_": "Za ", "overdue": "Po termínu o ", "every": "jednou za ", "or": " nebo ",
+           "yN": "{n} r.", "y1": "1 rok", "moN": "{n} měs.", "mo1": "1 měsíc", "dN": "{n} dní", "d1": "1 den"},
 }
 
 
