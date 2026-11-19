@@ -632,6 +632,7 @@
     "tyre_too_high": "過高",
     "doors": "車門",
     "windows": "車窗",
+    "all_windows": "全部車窗",
     "door_driver": "左前",
     "door_passenger": "右前",
     "door_rear_left": "左後",
