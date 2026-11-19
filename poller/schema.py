@@ -167,16 +167,6 @@ CREATE TABLE IF NOT EXISTS charges (
                                    -- user joins the rows instead, and can split them again.
 );
 
-CREATE TABLE IF NOT EXISTS maintenance_logs (
-    id               INTEGER PRIMARY KEY,
-    vehicle_id       INTEGER REFERENCES vehicles(id),
-    service_type     TEXT NOT NULL,             -- matches a pack item's service_type
-    done_date        TEXT NOT NULL,             -- ISO date the service was performed
-    done_odometer_km REAL,                       -- odometer at the service (prefilled with current)
-    note             TEXT,
-    created_at       TEXT DEFAULT (datetime('now'))
-);
-
 CREATE INDEX IF NOT EXISTS idx_positions_vehicle ON positions(vehicle_id, recorded_at);
 -- One car's rows in the order they were written: the odometer baseline a restart reads back
 -- (Database.get_last_odometer_reading) walks them from the newest without sorting the history.
@@ -185,7 +175,6 @@ CREATE INDEX IF NOT EXISTS idx_trip_positions_trip ON trip_positions(trip_id);
 CREATE INDEX IF NOT EXISTS idx_ha_samples_kind ON ha_samples(vehicle_id, kind, recorded_at);
 CREATE INDEX IF NOT EXISTS idx_trips_vehicle ON trips(vehicle_id, started_at);
 CREATE INDEX IF NOT EXISTS idx_charges_vehicle ON charges(vehicle_id, started_at);
-CREATE INDEX IF NOT EXISTS idx_maintenance_vehicle ON maintenance_logs(vehicle_id, service_type);
 -- Charge/Wallbox queries (power curve, time-of-use cost split, "has power" EXISTS)
 -- filter charging=1 and range/scan recorded_at; a small partial index keeps them
 -- fast as `positions` grows to millions of rows (~8% of rows are charging=1).

@@ -225,7 +225,10 @@
       {{ ago(status.data_age_s if status.data_age_s is not none else status.last_seen_s) }}
     </span>
   </div>
-  {% if car_resp %}
+  {# China-market commands are normally only "accepted by the cloud", never physically confirmed
+     by the car, so the responsiveness metric can stay on its unknown placeholder forever. Show the
+     row only once there is enough real evidence to say something. #}
+  {% if car_resp and not (china_market is defined and china_market() and car_resp.state == 'unknown') %}
   <div class="flex justify-between items-center text-slate-400 col-span-2 gap-2" title="{{ t('car_resp_hint') }}">
     <span class="flex-shrink-0">📶 {{ t('car_resp_title') }}</span>
     <span class="font-semibold flex items-center justify-end gap-1.5 text-right">

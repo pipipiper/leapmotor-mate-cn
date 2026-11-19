@@ -87,13 +87,9 @@ for i, (loc, kind, kwh, cost, ac, where) in enumerate([
         (iso(st), iso(st + timedelta(hours=2)), 13.0, 68.0, kwh, 120,
          where[0], where[1], kind, loc, 50, cost, ac))
 
-# ── maintenance ──────────────────────────────────────────────────────────────
-c.execute("INSERT INTO maintenance_logs (vehicle_id, service_type, done_date, done_odometer_km,"
-          " note) VALUES (2,'tyres','2026-07-01',88000,'CAR 2 — must never show under car 1')")
-
 con.commit()
 n = {t: c.execute(f"SELECT COUNT(*) FROM {t} WHERE vehicle_id=2").fetchone()[0]
-     for t in ("positions", "trips", "charges", "maintenance_logs")}
+     for t in ("positions", "trips", "charges")}
 print(f"car 2 (T03, Rome) added: {n}")
 print("newest row car 1:", last1)
 print("newest row car 2:", c.execute(

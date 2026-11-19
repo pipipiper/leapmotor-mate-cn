@@ -15,8 +15,7 @@ import urllib.request
 
 A, B = "http://localhost:4002", "http://localhost:4003"      # 2 vehicles / 1 vehicle
 PAGES = ["/", "/trips", "/map", "/charges", "/costs", "/statistics", "/report", "/battery",
-         "/maintenance", "/commands", "/scheduling", "/vehicle", "/wallbox", "/navigation",
-         "/prepare-car", "/settings", "/fuel"]
+         "/commands", "/scheduling", "/vehicle", "/wallbox", "/settings", "/fuel"]
 APIS = ["/api/overview-hero", "/api/status-card", "/api/battery-card", "/api/cumulative-summary",
         "/api/energy-breakdown", "/api/consumption-rank", "/api/charging-live", "/api/cmd-grid",
         "/api/energy-since-charge", "/api/diagnostics/missed-charges", "/api/v2l-card",

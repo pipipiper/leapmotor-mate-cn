@@ -38,7 +38,6 @@ MATE_VERSION = "5.0.0"  # bump together with the git tag + add-on config.yaml at
 
 import diagnostics
 import demo
-import maintenance
 import ec_enrich
 import elevation_enrich
 import place_lookup
@@ -2174,67 +2173,6 @@ async def fuel_edit(request: Request):
                                       headers={"HX-Trigger": "fuelChanged"})
 
 
-def _maint_ctx(request: Request):
-    """Shared context for the maintenance page + its HTMX partial responses."""
-    from datetime import date
-    vehicle, _ = db_reader.get_vehicle()
-    lang = db_reader.get_language()
-    status = db_reader.get_latest_status() or {}
-    data = maintenance.compute(vehicle, status.get("odometer_km"), lang)
-    return _ctx(page="maintenance", vehicle=vehicle, maint=data,
-                tyres=maintenance.tyre_view((vehicle or {}).get("id"), lang),
-                m=maintenance.chrome(lang), today=date.today().isoformat())
-
-
-@app.get("/maintenance", response_class=HTMLResponse)
-async def maintenance_page(request: Request):
-    return templates.TemplateResponse(request, "maintenance.html", _maint_ctx(request))
-
-
-@app.post("/api/maintenance/log", response_class=HTMLResponse)
-async def maintenance_log(request: Request):
-    form = await request.form()
-    vehicle, _ = db_reader.get_vehicle()
-    st = (form.get("service_type") or "").strip()
-    dt = (form.get("date") or "").strip()
-    if vehicle and st and dt:
-        try:
-            # the km field is entered in the user's unit (mi for UK/US) → store as km
-            km = units.dist_to_km(float(form.get("km"))) if (form.get("km") or "") != "" else None
-        except (TypeError, ValueError):
-            km = None
-        maintenance.add_log(vehicle["id"], st, dt, km, (form.get("note") or "").strip())
-    return templates.TemplateResponse(request, "partials/maintenance_content.html", _maint_ctx(request))
-
-
-@app.post("/api/maintenance/unlog", response_class=HTMLResponse)
-async def maintenance_unlog(request: Request):
-    form = await request.form()
-    vehicle, _ = db_reader.get_vehicle()
-    st = (form.get("service_type") or "").strip()
-    if vehicle and st:
-        maintenance.delete_log(vehicle["id"], st)
-    return templates.TemplateResponse(request, "partials/maintenance_content.html", _maint_ctx(request))
-
-
-@app.post("/api/maintenance/baseline", response_class=HTMLResponse)
-async def maintenance_baseline(request: Request):
-    form = await request.form()
-    dt = (form.get("date") or "").strip()
-    if dt:
-        # #112 (@Wartopia): the user now sets the delivery ODOMETER too (in their unit → store km), so a
-        # first-service bar can start from the real odometer (0 for a new car) instead of the odometer
-        # Mate happened to see on install. Blank → keep the current value.
-        try:
-            km = units.dist_to_km(float(form.get("km"))) if (form.get("km") or "").strip() != "" else None
-        except (TypeError, ValueError):
-            km = None
-        if km is None:
-            _, km, _explicit = maintenance.get_baseline()   # fall back to the current anchor km
-        maintenance.set_baseline(dt, km)
-    return templates.TemplateResponse(request, "partials/maintenance_content.html", _maint_ctx(request))
-
-
 @app.get("/map", response_class=HTMLResponse)
 async def map_page(request: Request):
     vehicle, _ = db_reader.get_vehicle()
@@ -2657,8 +2595,6 @@ async def settings_page(request: Request):
     return templates.TemplateResponse(request, "settings.html", _ctx(
         page="settings", vehicle=vehicle, settings=settings, card_open=card_open,
         new_sections=new_sections,
-        tyre_seasons=maintenance.get_tyre_seasons(),
-        tyre_months=i18n._MONTHS.get(db_reader.get_language(), i18n._MONTHS["en"])["full"],
         charge_types=db_reader.charge_types_localised(),
         ha_url=db_reader.get_setting("ha_url", ""),
         ha_has_token=bool(db_reader.get_setting("ha_token", "")),
@@ -2985,24 +2921,6 @@ async def save_elevation(request: Request):
     val = "1" if form.get("elevation_enabled") in ("1", "on", "true") else "0"
     db_reader.set_setting("elevation_enabled", val)
     t = i18n.get_t(db_reader.get_language())
-    return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("retention_saved")}</span>')
-
-
-@app.post("/api/settings/tyre-seasons", response_class=HTMLResponse)
-async def save_tyre_seasons(request: Request):
-    """Summer and winter tyres counted apart (D#493): the switch and the two days, of the selected
-    car. Switched on, both days must exist every year and differ, or nothing is saved."""
-    form = await request.form()
-
-    def md(prefix):
-        m, d = (form.get(f"{prefix}_month") or "").strip(), (form.get(f"{prefix}_day") or "").strip()
-        return f"{m}-{d}" if m and d else ""
-    enabled = form.get("tyre_seasons_enabled") in ("1", "on", "true")
-    err = maintenance.set_tyre_seasons(enabled, md("winter"), md("summer"))
-    from html import escape
-    t = i18n.get_t(db_reader.get_language())
-    if err:
-        return HTMLResponse(f'<span style="color:#f87171;font-size:13px">{escape(t(err))}</span>')
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("retention_saved")}</span>')
 
 
@@ -4020,7 +3938,7 @@ async def test_mqtt(request: Request):
 # Every collapsible card on the Settings accordion. Used both to build the initial
 # open/collapsed map and as the allowlist for the ui-state save endpoint.
 _UI_CARD_KEYS = {"locale", "vehicle", "battery", "polling", "charge_detect", "trips", "advanced",
-                 "geocoder", "map_display", "wallbox", "mqtt", "tyres",
+                 "geocoder", "map_display", "wallbox", "mqtt",
                  "database", "export", "diagnostics"}
 
 # Settings sections flagged "new in a recent release": the section shows a NEW badge on its header

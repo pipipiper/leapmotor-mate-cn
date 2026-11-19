@@ -54,22 +54,6 @@ def test_every_language_has_a_file():
         assert (LOCALES / f"{lang}.json").is_file(), f"no locale file for {lang}"
 
 
-@pytest.mark.parametrize("lang", [l for l in LANGS if l != "en"])
-def test_the_maintenance_page_has_every_string_too(lang):
-    """A THIRD copy, found while adding Spanish: `maintenance.py` keeps its own per-language dicts
-    and falls back to English key by key, so a gap there is silent in exactly the same way — the
-    Maintenance page half in your language and half in English, and nothing failing anywhere."""
-    import maintenance
-    for name in ("_LABELS", "_CATS", "_CHROME", "_P"):
-        d = getattr(maintenance, name)
-        if name == "_P":                       # {lang: {fragment: text}}, not {key: {lang: text}}
-            assert lang in d, f"maintenance._P has no {lang} block"
-            missing = sorted(k for k in d["en"] if k not in d[lang])
-        else:                                  # {key: {lang: text}}
-            missing = sorted(k for k, v in d.items() if not v.get(lang))
-        assert not missing, f"maintenance.{name} is missing {len(missing)} for {lang}: {missing[:8]}"
-
-
 def test_no_page_title_is_hardcoded_english():
     """The browser tab is a surface too, and it was the last one still in English.
 

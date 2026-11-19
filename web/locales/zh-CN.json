@@ -1349,7 +1349,7 @@
     "tou_preset_weekend": "周末",
     "setup_title": "欢迎使用 LeapMotor Mate",
     "setup_subtitle": "设置车辆连接以开始使用",
-    "setup_email": "零跑账号电子邮件",
+    "setup_email": "零跑账号手机号",
     "setup_email_ph": "you@example.com",
     "setup_password": "密码",
     "setup_pin": "车辆操作 PIN",

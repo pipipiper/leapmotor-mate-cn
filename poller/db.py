@@ -1269,7 +1269,7 @@ class Database:
         if row is None:
             return                                   # no vehicle yet → retry on a later start
         vid, n = row["id"], 0
-        for t in ("positions", "trips", "charges", "maintenance_logs"):   # fixed table names, never input
+        for t in ("positions", "trips", "charges"):   # fixed table names, never input
             n += self._conn.execute(
                 f"UPDATE {t} SET vehicle_id = ? WHERE vehicle_id IS NULL", (vid,)).rowcount
         self._conn.commit()

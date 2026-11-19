@@ -1365,7 +1365,7 @@
     "tou_preset_weekend": "Fin de semana",
     "setup_title": "Te damos la bienvenida a LeapMotor Mate",
     "setup_subtitle": "Configura la conexión con tu vehículo para empezar",
-    "setup_email": "Correo de la cuenta de Leapmotor",
+    "setup_email": "Número de teléfono de la cuenta de Leapmotor",
     "setup_email_ph": "tu@ejemplo.com",
     "setup_password": "Contraseña",
     "setup_pin": "PIN de operaciones",
