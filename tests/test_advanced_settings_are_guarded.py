@@ -38,7 +38,7 @@ SETTINGS_HTML = (ROOT / "web" / "templates" / "settings.html").read_text()
 
 # Every slider that changes behaviour, and the form that posts it.
 GUARDED_FORMS = ("api/poll-settings", "api/settings/charge-detect", "api/settings/advanced",
-                 "api/settings/charger-locator/map-threshold")
+                 "api/settings/map-station-threshold")
 
 
 @pytest.fixture

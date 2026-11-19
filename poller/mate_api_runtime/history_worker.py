@@ -3,16 +3,18 @@ import hashlib
 import json
 import os
 import secrets
+import threading
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import crypto
 from pathlib import Path
 from api_v2_bridge import DB, NewAPIClient, LeapmotorApiError, connect_db, setting, set_setting
-from leapmotor_cloud.transport import TransportError
-from cloud_import_policy import import_from, import_trips, past_months, trips_enabled
-from migrate_cloud_trips import migrate
+from cn_backend import ChinaAPIClient, ChinaAuthRequired, ChinaError, db_path
 from migrate_cloud_charges import migrate as migrate_charges
+from process_lock import exclusive
+
+_cn_sync_lock = threading.Lock()
 
 
 def _client(username, password, device, on_login=None):
@@ -59,7 +61,7 @@ def _read_window(api, route, vin, kind, start, end):
     return records
 
 
-def _stage(kind, records, now, month=None):
+def _stage(kind, records, now, month=None, month_kind=None):
     """Stage one window's records; an earlier month, `(vin, 'YYYY-MM')`, is marked asked with them."""
     with connect_db() as db:
         for row in records:
@@ -68,76 +70,107 @@ def _stage(kind, records, now, month=None):
                 (kind,hashlib.sha256(payload.encode()).hexdigest(),'api-v2-worker',now.isoformat(),payload))
         if month:
             db.execute('INSERT OR REPLACE INTO api_lab_cloud_history_months VALUES (?,?,?,?)',
-                (month[0],kind,month[1],now.isoformat()))
+                (month[0],month_kind or kind,month[1],now.isoformat()))
 
 
 def sync_once(on_login=None):
+    return _sync_cn(on_login)
+
+
+def _cn_past_months(start_ym, today_date):
+    year, month = start_ym
+    min_year = today_date.year - 3
+    if (year, month) < (min_year, today_date.month):
+        year, month = min_year, today_date.month
+    months = []
+    while (year, month) < (today_date.year, today_date.month):
+        months.append((year, month))
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return months
+
+
+def _sync_cn_body(on_login=None):
     with connect_db() as db:
         if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='settings'").fetchone():
-            return
+            return {'state': 'uninitialized'}
         db.execute('''CREATE TABLE IF NOT EXISTS api_lab_cloud_history_records (
             kind TEXT NOT NULL, record_sha256 TEXT NOT NULL, source TEXT NOT NULL,
             imported_at TEXT NOT NULL, payload_json TEXT NOT NULL,
             PRIMARY KEY(kind,record_sha256))''')
-        # The earlier months already asked whole, per car and kind: each is asked once.
         db.execute('''CREATE TABLE IF NOT EXISTS api_lab_cloud_history_months (
             vin TEXT NOT NULL, kind TEXT NOT NULL, month TEXT NOT NULL, asked_at TEXT NOT NULL,
             PRIMARY KEY(vin,kind,month))''')
-        username=crypto.decrypt(setting(db,'leapmotor_user')) or os.environ.get('LEAPMOTOR_USER', '')
-        password=crypto.decrypt(setting(db,'leapmotor_pass')) or os.environ.get('LEAPMOTOR_PASS', '')
-        device=setting(db,'mate_device_id')
-        if not device:
-            device='mate-'+secrets.token_hex(16)
-            set_setting(db,'mate_device_id',device)
-        local_vins={row[0] for row in db.execute('SELECT vin FROM vehicles')}
-        first=import_from(db) if trips_enabled(db) else None
-        done={tuple(row) for row in db.execute('SELECT vin,kind,month FROM api_lab_cloud_history_months')}
-    if not username or not password or not local_vins:return
-    api=_client(username,password,device,on_login)
-    # Persisted cars survive account changes; only current authenticated bindings
-    # may authorize a cloud read. New cars wait until the poller registers them.
-    vins=list(dict.fromkeys(vehicle.vin for vehicle in api.get_vehicle_list()
-                           if vehicle.vin in local_vins and type(vehicle.is_shared) is bool))
-    if not vins:return
-    zone=ZoneInfo(os.environ.get('TZ', 'UTC'))
-    now=datetime.now(timezone.utc);local=now.astimezone(zone)
-    start=datetime(local.year,local.month,1,tzinfo=zone)
-    # The earlier months the user chose to import, whole months in the user's time zone. The cloud
-    # is asked from the first of the CURRENT month above, so without these an installation made on
-    # the 1st never sees the month before it (Silvio's MateDesktop, 01/10/2026).
-    months=[(datetime(y,m,1,tzinfo=zone),datetime(y+m//12,m%12+1,1,tzinfo=zone),f'{y:04d}-{m:02d}')
-            for y,m in past_months(local.date()) if first and (y,m)>=first]
-    summary={}
-    for vin in vins:
+        if setting(db, 'api_v2_import_cloud_charges', '1') == '0':
+            return {'state': 'disabled'}
+        username = crypto.decrypt(setting(db, 'leapmotor_user')) or ''
+        local_map = {row[0].lower(): row[0] for row in db.execute('SELECT vin FROM vehicles')}
+        done = {tuple(row) for row in db.execute("SELECT vin,kind,month FROM api_lab_cloud_history_months WHERE kind='cn_charge'")}
+    if not local_map:
+        return {'state': 'no_vehicles'}
+    api = ChinaAPIClient(username=username, on_login=on_login)
+    try:
+        bindings = api.get_vehicle_list()
+    except ChinaAuthRequired:
+        return {'state': 'auth_required'}
+    cars = [(car, local_map[car.vin.lower()]) for car in bindings if car.vin.lower() in local_map]
+    if not cars:
+        return {'state': 'no_matching_vehicles'}
+    zone = ZoneInfo('Asia/Shanghai')
+    now = datetime.now(timezone.utc)
+    local = now.astimezone(zone)
+    local_date = local.date()
+    current_start = date(local_date.year, local_date.month, 1).isoformat()
+    current_end = (local_date + timedelta(days=1)).isoformat()
+    summary = {'market': 'CN', 'charge': 0}
+    for car, db_vin in cars:
         try:
-            route=api.route(vin)
-            for kind in ('mileage','charge'):
-                records=_read_window(api,route,vin,kind,start,now)
-                _stage(kind,records,now)
-                summary[kind]=summary.get(kind, 0)+len(records)
-            for month_start,month_end,month in months:
-                for kind in ('mileage','charge'):
-                    if (vin,kind,month) in done:continue
-                    try:records=_read_window(api,route,vin,kind,month_start,month_end)
-                    except ValueError:
-                        # Neither staged nor marked: asked again at the next synchronization, while
-                        # the current month above is staged and imported as usual.
-                        summary['months_incomplete']=summary.get('months_incomplete', 0)+1
-                        continue
-                    _stage(kind,records,now,(vin,month))
-                    summary[kind]=summary.get(kind, 0)+len(records)
-        except (LeapmotorApiError, TransportError):
-            # Rights may disappear between listing and reading, or one route may
-            # be unavailable. Continue other current vehicles without logging VINs,
-            # credentials, payloads, or upstream exception messages.
-            summary['unavailable_vehicles']=summary.get('unavailable_vehicles', 0)+1
+            try:
+                valid = api.get_charge_valid_start(car)
+            except ChinaError:
+                valid = {}
+            records = api.get_charge_records(car, current_start, current_end)
+            records = [dict(row, vin=db_vin) for row in records]
+            _stage('charge', records, now)
+            summary['charge'] += len(records)
+            earliest = (local_date.year, local_date.month)
+            if valid.get('vail_date'):
+                try:
+                    vail_d = date.fromisoformat(valid['vail_date'])
+                    earliest = (vail_d.year, vail_d.month)
+                except ValueError:
+                    pass
+            for year, month in _cn_past_months(earliest, local_date):
+                month_key = f'{year:04d}-{month:02d}'
+                if (db_vin, 'cn_charge', month_key) in done:
+                    continue
+                m_start = date(year, month, 1).isoformat()
+                m_end = date(year + month // 12, month % 12 + 1, 1).isoformat()
+                try:
+                    month_records = api.get_charge_records(car, m_start, m_end)
+                except (ChinaError, ValueError):
+                    summary['months_incomplete'] = summary.get('months_incomplete', 0) + 1
+                    continue
+                month_records = [dict(row, vin=db_vin) for row in month_records]
+                _stage('charge', month_records, now, (db_vin, month_key), month_kind='cn_charge')
+                summary['charge'] += len(month_records)
+        except (ChinaError, ValueError):
+            summary['unavailable_vehicles'] = summary.get('unavailable_vehicles', 0) + 1
             continue
     with connect_db() as db:
-        summary['trip_import']=import_trips(db, migrate)
-        summary['charge_import']=migrate_charges(db)
-        summary['at']=now.isoformat()
-        set_setting(db,'api_v2_history_sync',json.dumps(summary))
-    print(json.dumps({'api_v2_history_sync':summary}),flush=True)
+        summary['charge_import'] = migrate_charges(db)
+        summary['at'] = now.isoformat()
+        set_setting(db, 'api_v2_history_sync', json.dumps(summary))
+    print(json.dumps({'api_v2_history_sync': summary}), flush=True)
+    return summary
+
+
+def _sync_cn(on_login=None):
+    target = os.environ.get('DB_PATH') or DB
+    if target == ':memory:':
+        return _sync_cn_body(on_login)
+    lock_path = Path(target).resolve().with_suffix('.cn-history.lock')
+    with _cn_sync_lock, exclusive(lock_path):
+        return _sync_cn_body(on_login)
 
 
 if __name__=='__main__':

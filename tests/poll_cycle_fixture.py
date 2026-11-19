@@ -79,7 +79,6 @@ def make_poll(PM, tmp_path, monkeypatch):
     for name in ("_maybe_refresh_charge_schedule", "_write_comfort_state"):
         monkeypatch.setattr(PM, name, lambda *a, **k: None)
     monkeypatch.setattr(PM.energy_snapshots, "maybe_sample", lambda *a, **k: None)
-    monkeypatch.setattr(PM.ready_automation, "maybe_trigger", lambda *a, **k: None)
     monkeypatch.setattr(PM, "_mqtt_tick", lambda *a, **k: None)
 
     class _Vehicle:

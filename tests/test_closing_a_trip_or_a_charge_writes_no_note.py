@@ -46,14 +46,12 @@ class _Inline:
 @pytest.fixture
 def quiet(tmp_path, monkeypatch):
     """A recorder whose threads run inline, on a database the web reads too, and every request
-    to a geocoding provider or a station lookup written down."""
-    import charger_locator
+    to a geocoding provider written down."""
     import db_reader
     import geocode
     import place_lookup
     asked = []
     monkeypatch.setattr(geocode, "_get", lambda url: asked.append(url) or {})
-    monkeypatch.setattr(charger_locator, "find_station_candidates", lambda lat, lon: asked.append((lat, lon)) or ([], True))
     monkeypatch.setattr(place_lookup, "maybe_sweep", lambda: None)      # the web's own pass is not the recorder
     # The recorder's threads, not the process's: it may start none, and then has no `threading` to replace.
     monkeypatch.setattr(R, "threading", types.SimpleNamespace(Thread=_Inline), raising=False)

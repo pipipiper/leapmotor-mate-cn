@@ -20,7 +20,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlencode, urlsplit
@@ -572,6 +572,187 @@ class ChinaAPIClient:
                          'source': 'official' if values else 'unavailable'})
             day += timedelta(days=1)
         return rows
+
+    @staticmethod
+    def _parse_cn_date(value):
+        text = str(value or '').strip()
+        if not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', text):
+            raise ChinaError('請輸入有效的日期格式（YYYY-MM-DD）')
+        try:
+            return date.fromisoformat(text)
+        except ValueError:
+            raise ChinaError('請輸入有效的日期格式（YYYY-MM-DD）') from None
+
+    @staticmethod
+    def _parse_cn_int(value, label):
+        if type(value) is int:
+            return value
+        if isinstance(value, str) and re.fullmatch(r'-?[0-9]{1,12}', value.strip()):
+            return int(value.strip())
+        raise ChinaError(f'中國區充電{label}格式無效')
+
+    @staticmethod
+    def _normalize_charge_stats(data):
+        if not isinstance(data, dict):
+            data = {}
+        items = []
+        for raw_item in data.get('chargeStatisList') or []:
+            if not isinstance(raw_item, dict):
+                continue
+            day_raw = str(raw_item.get('statisDay') or raw_item.get('statisMonth') or '').strip()
+            day_part = day_raw[:10]
+            if re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', day_part):
+                day_iso = day_part
+                month_iso = day_part[:7]
+            elif re.fullmatch(r'[0-9]{4}-[0-9]{2}', day_raw[:7]):
+                month_iso = day_raw[:7]
+                day_iso = f'{month_iso}-01'
+            else:
+                continue
+            try:
+                energy = float(raw_item.get('chargeInEnergy') or 0.0)
+            except (TypeError, ValueError):
+                energy = 0.0
+            items.append({
+                'day': day_iso,
+                'month': month_iso,
+                'energy_kwh': round(energy, 3) if math.isfinite(energy) else 0.0,
+            })
+        try:
+            total_count = int(data.get('totalChargeCounts') or 0)
+        except (TypeError, ValueError):
+            total_count = 0
+        try:
+            total_energy = float(data.get('totalChargeInEnergy') or 0.0)
+        except (TypeError, ValueError):
+            total_energy = 0.0
+        try:
+            fast_percent = float(data.get('fastChargePercent') or 0.0)
+        except (TypeError, ValueError):
+            fast_percent = 0.0
+        return {
+            'total_count': max(total_count, 0),
+            'total_energy_kwh': round(total_energy, 3) if math.isfinite(total_energy) else 0.0,
+            'fast_charge_percent': round(fast_percent, 1) if math.isfinite(fast_percent) else 0.0,
+            'items': items,
+        }
+
+    def _charge_post(self, vehicle, path, body):
+        car = self._vehicle(vehicle)
+        return self._read(self.route_for(car), '/carownerservice/charge/' + path, body, method='POST', form=False, vin=car.vin)
+
+    def get_charge_valid_start(self, vehicle):
+        car = self._vehicle(vehicle)
+        result = self._charge_post(car, 'vail/startTime/query', {'vin': car.vin})
+        data = result.get('data') if isinstance(result.get('data'), dict) else {}
+        vail_raw = data.get('vailTime')
+        vail_date = None
+        vail_ms = None
+        if type(vail_raw) is int or (isinstance(vail_raw, str) and re.fullmatch(r'[0-9]{10,16}', vail_raw.strip())):
+            vail_ms = int(vail_raw)
+            vail_date = datetime.fromtimestamp(vail_ms / 1000, ZoneInfo('Asia/Shanghai')).date().isoformat()
+        elif isinstance(vail_raw, str) and re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', vail_raw.strip()):
+            vail_date = vail_raw.strip()[:10]
+            dt = datetime.combine(date.fromisoformat(vail_date), datetime.min.time(), ZoneInfo('Asia/Shanghai'))
+            vail_ms = int(dt.timestamp() * 1000)
+        return {
+            'vail_time_ms': vail_ms,
+            'vail_date': vail_date,
+            'current_time_ms': data.get('currentTimeMillis'),
+        }
+
+    def get_charge_statistics_days(self, vehicle, start_date, end_date):
+        start = self._parse_cn_date(start_date)
+        end = self._parse_cn_date(end_date)
+        if start > end or (end - start).days > 366:
+            raise ChinaError('請選擇有效的充電統計日期範圍')
+        try:
+            result = self._charge_post(vehicle, 'statistic/days', {
+                'vin': self._vehicle(vehicle).vin,
+                'startTime': start.isoformat(),
+                'endTime': end.isoformat(),
+            })
+            return self._normalize_charge_stats(result.get('data'))
+        except ChinaError as error:
+            if error.code == 100:
+                return self._normalize_charge_stats({})
+            raise
+
+    def get_charge_statistics_year(self, vehicle, year):
+        year_text = str(year or '').strip()
+        if not re.fullmatch(r'20[0-9]{2}', year_text):
+            raise ChinaError('請輸入有效的年份')
+        try:
+            result = self._charge_post(vehicle, 'statistic/year', {
+                'vin': self._vehicle(vehicle).vin,
+                'year': year_text,
+            })
+            return self._normalize_charge_stats(result.get('data'))
+        except ChinaError as error:
+            if error.code == 100:
+                return self._normalize_charge_stats({})
+            raise
+
+    def get_charge_daily_detail_page(self, vehicle, start_date, end_date, page_num=1, page_size=50):
+        start = self._parse_cn_date(start_date)
+        end = self._parse_cn_date(end_date)
+        if start > end:
+            raise ChinaError('請選擇有效的充電記錄日期範圍')
+        page_num = int(page_num)
+        page_size = int(page_size)
+        if page_num < 1 or not 1 <= page_size <= 100:
+            raise ChinaError('充電記錄分頁參數無效')
+        result = self._charge_post(vehicle, 'daily/detail/page', {
+            'vin': self._vehicle(vehicle).vin,
+            'startTime': start.isoformat(),
+            'endTime': end.isoformat(),
+            'pageNum': str(page_num),
+            'pageSize': str(page_size),
+        })
+        data = result.get('data')
+        return data if isinstance(data, dict) else {}
+
+    def get_charge_records(self, vehicle, start_date, end_date, page_size=50):
+        car = self._vehicle(vehicle)
+        records, seen, total_expected, complete = [], set(), None, False
+        for page in range(1, 101):
+            try:
+                data = self.get_charge_daily_detail_page(car, start_date, end_date, page_num=page, page_size=page_size)
+            except ChinaError as error:
+                if error.code == 100 and page == 1:
+                    return []
+                raise
+            total = self._parse_cn_int(data.get('total', 0), '總數')
+            if data.get('pageNum') is not None and self._parse_cn_int(data.get('pageNum'), '頁碼') != page:
+                raise ValueError('Unexpected CN charge history page')
+            if total_expected is not None and total != total_expected:
+                raise ValueError('CN charge history changed during paging')
+            total_expected = total
+            rows = data.get('list')
+            if rows is None and total == 0:
+                rows = []
+            if not isinstance(rows, list):
+                raise ValueError('Invalid CN charge history records')
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise ValueError('Invalid CN charge history record')
+                row_vin = row.get('vin')
+                if row_vin is not None and str(row_vin).lower() != car.vin.lower():
+                    raise ValueError('CN charge history vehicle mismatch')
+                bound = dict(row, vin=car.vin)
+                key = json.dumps(bound, sort_keys=True, separators=(',', ':'))
+                if key in seen:
+                    raise ValueError('Duplicate CN charge history record')
+                seen.add(key)
+                records.append(bound)
+            if len(records) >= total:
+                complete = len(records) == total
+                break
+            if not rows:
+                break
+        if not complete:
+            raise ValueError('Incomplete CN charge history batch')
+        return records
 
     def _command(self, vin, action, cmd, state, path=CONTROL):
         car = self._vehicle(vin)

@@ -128,7 +128,6 @@ def loop(tmp_path, monkeypatch):
         for name in ("_maybe_refresh_charge_schedule",):
             monkeypatch.setattr(PM, name, lambda *a, **k: None)
         monkeypatch.setattr(PM.energy_snapshots, "maybe_sample", lambda *a, **k: None)
-        monkeypatch.setattr(PM.ready_automation, "maybe_trigger", lambda *a, **k: None)
         monkeypatch.setattr(PM, "_mqtt_tick", lambda *a, **k: None)
         monkeypatch.setattr(PM, "load_config", lambda db: {
             "username": "u", "password": "p", "pin": "1234",

@@ -41,10 +41,6 @@ def _has_pencil(html):
     return "locate/manual" in html
 
 
-def _has_lookup(html):
-    return 'hx-post="api/charges/7/locate"' in html
-
-
 # ── the defect ─────────────────────────────────────────────────────────────────
 
 def test_a_hand_entered_charge_can_still_be_given_a_station_name(render):
@@ -53,24 +49,16 @@ def test_a_hand_entered_charge_can_still_be_given_a_station_name(render):
     assert _has_pencil(html), "no ✏️ on a charge the user typed in himself"
 
 
-def test_the_lookup_stays_hidden_without_coordinates(render):
-    """🔄 searches around a point. Without one there is nothing to search around, so offering the
-    button would only produce a failure the user cannot act on."""
-    html = render(latitude=None, longitude=None)
-    assert not _has_lookup(html)
-
-
 # ── everything else must be exactly as it was ──────────────────────────────────
 
-def test_a_located_charge_offers_both(render):
+def test_a_located_charge_offers_the_pencil(render):
     html = render(latitude=45.44, longitude=9.12)
-    assert _has_pencil(html) and _has_lookup(html)
+    assert _has_pencil(html)
 
 
-def test_home_offers_neither(render):
+def test_home_offers_no_pencil(render):
     """Naming your own wallbox as a public station means nothing, with or without a fix."""
     assert not _has_pencil(render(location_type="HOME", latitude=45.44, longitude=9.12))
-    assert not _has_lookup(render(location_type="HOME", latitude=45.44, longitude=9.12))
     assert not _has_pencil(render(location_type="HOME"))
 
 
@@ -79,7 +67,6 @@ def test_a_zero_zero_fix_counts_as_no_fix(render):
     been the point (see the charges Null Island case); it must keep the lookup away while still
     letting the name through."""
     html = render(latitude=0.0, longitude=0.0)
-    assert not _has_lookup(html)
     assert _has_pencil(html)
 
 

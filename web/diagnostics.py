@@ -202,7 +202,6 @@ def build_system_info(version: str) -> dict:
             # whether the meter is read and billed at all.
             "wallbox": settings.get("wallbox_enabled", "0") == "1",
             "ha": bool(settings.get("ha_url") or os.environ.get("SUPERVISOR_TOKEN")),
-            "abrp": settings.get("abrp_enabled") == "1",
             "addon": bool(os.environ.get("SUPERVISOR_TOKEN")),
         },
         "last_poll_iso": last["recorded_at"] if last else None,
@@ -1099,7 +1098,7 @@ def build_bundle(version: str, parts=_BUNDLE_PARTS, lines: int = 300, signals: d
             f"Vampire thr  : min_drop {info['vampire_min_drop_pct']} % SoC · "
             f"min_hours {info['vampire_min_hours']} h (chart display thresholds)",
             f"Features     : mqtt={f['mqtt']} wallbox={f['wallbox']} ha={f['ha']} "
-            f"abrp={f['abrp']} addon={f['addon']}",
+            f"addon={f['addon']}",
             # Only present in the Mac/Windows app. Worth its own line because "Mate won't update"
             # has two unrelated causes, and this number is what separates a shell too old to run
             # the newest release from a genuine fault — the first question triage should ask.

@@ -10,10 +10,8 @@ from datetime import datetime, timezone
 
 _PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 
-import abrp
 import energy_snapshots
 import gps_position
-import ready_automation
 import session_share
 from client import (LeapmotorMateClient, set_charge_current_min, EmptyStatusError,
                     seed_coord_signs, get_coord_signs, restore_gps_record, get_gps_record, use_pin_of)
@@ -582,32 +580,12 @@ def _store_charge_schedule(db, sched, vin: str = "") -> None:
         log.debug("Could not store the charge schedule: %s", e)
 
 
-_BETA_PREFIX_SUFFIX = "_beta"   # what a colliding BetaTester install renames its prefix to
-
-
 def _handle_mqtt_collision(db, other_id: str, other_is_beta: bool, vin: str):
-    """Another Mate is publishing on our topic prefix. Record it so Settings can say so — and, if we
-    are the BetaTester build, get out of the way by ourselves.
-
-    Only the BetaTester moves, and this is the whole rule (Silvio's call, 04/08). Its entities are
-    the ones nobody has built an automation on yet, and its own description already tells the tester
-    it is the guest here; the official install keeps its prefix, its device and every automation
-    pointing at it. When two OFFICIAL installs collide, neither can claim to be the real one, so
-    nothing moves and the warning is all Mate has to offer.
-
-    Moving is writing the setting: _mqtt_tick notices the changed signature on the next cycle and
-    reconnects on the new prefix. Once only — if we already carry the suffix and are STILL colliding,
-    a second beta is on the same broker and that one needs a human."""
+    """Another Mate is publishing on our topic prefix; record it for Settings."""
     prefix = db.get_setting("mqtt_prefix", "leapmotor")
-    moved_to = ""
-    if _research_enabled() and not prefix.endswith(_BETA_PREFIX_SUFFIX):
-        moved_to = prefix + _BETA_PREFIX_SUFFIX
-        db.set_setting("mqtt_prefix", moved_to)
-        log.warning("MQTT: another Mate holds prefix '%s' — this BetaTester build is moving to '%s'. "
-                    "The official install is untouched.", prefix, moved_to)
     db.set_setting("mqtt_collision", json.dumps({
         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "prefix": prefix, "other_beta": bool(other_is_beta), "vin": vin, "moved_to": moved_to,
+        "prefix": prefix, "other_beta": bool(other_is_beta), "vin": vin, "moved_to": "",
     }))
 
 
@@ -653,11 +631,9 @@ def _mqtt_connect(db, client, service):
             # The car MODEL gates model-absent entities in discovery (e.g. no heated-seat / heated-
             # steering entities on a T03, which lacks them despite the firmware declaring them — #144).
             car_type=db.get_car_type(),
-            # Who this install is on the broker, and whether it is the BetaTester build — the two
-            # facts the collision check below needs. `mate_device_id` already exists (generated at
-            # first run), so no new identity is minted for this.
+            # Who this install is on the broker.
             instance_id=db.get_setting("mate_device_id", ""),
-            is_beta=_research_enabled(),
+            is_beta=False,
         )
         service.config_sig = sig
         service.on_command = lambda vin, cmd, val: _handle_mqtt_command(client, service, db, vin, cmd, val)
@@ -765,12 +741,6 @@ def _cert_path(filename: str, env_key: str) -> str:
     return str(_PROJECT_ROOT / "certs" / filename)
 
 
-def _research_enabled() -> bool:
-    """True only in the MateBetaTesterOnly build (MATE_RESEARCH baked into that image).
-    Off in the normal build → the full-signal capture below is a complete no-op."""
-    return os.environ.get("MATE_RESEARCH", "") not in ("", "0", "false", "False", "no")
-
-
 def reconcile_coord_signs(db, vehicle_id: int, vin: str) -> None:
     """Prime the GPS sign memory, letting the car's OWN HISTORY overrule the stored setting (#232).
 
@@ -828,8 +798,7 @@ class VehicleContext:
     Until now this state lived as local variables of `main()` — a recorder, the GPS signs it had
     persisted, two error counters, the last value of every raw signal. That is exactly right for one
     car and silently wrong for two: a single `empty_status_count` means a sleeping car backs off the
-    one that is being driven, and a single `_research_last_sig` makes each car's signals look changed
-    because the other one wrote them last.
+    one that is being driven.
 
     So the state moves here first, before any second car exists, and nothing else changes. With one
     car this object holds precisely what the locals held and the loop behaves identically — which is
@@ -841,8 +810,8 @@ class VehicleContext:
     """
 
     __slots__ = ("vehicle", "vehicle_id", "vin", "recorder", "persisted_signs",
-                 "persisted_gps_record", "empty_status_count", "poll_error_count", "research_last_sig",
-                 "interval", "next_due", "outside_sampler", "abrp_last_sent", "link")
+                 "persisted_gps_record", "empty_status_count", "poll_error_count",
+                 "interval", "next_due", "outside_sampler", "link")
 
     def __init__(self, db, vehicle, vehicle_id: int):
         self.vehicle = vehicle
@@ -857,11 +826,9 @@ class VehicleContext:
         self.persisted_gps_record = ""
         self.empty_status_count = 0   # consecutive "no live signals" responses (car asleep)
         self.poll_error_count = 0     # consecutive hard API errors (cloud unreachable)
-        self.research_last_sig: dict = {}   # beta build: last value per signal id, for delta logging
         # live outside temp (Open-Meteo), cached per car; starts from the last real fix and reading on disk
         self.outside_sampler = OutsideTempSampler(last_fix=db.last_fix(vehicle_id),
                                                   last_temp=db.last_outside_temp(vehicle_id))
-        self.abrp_last_sent = abrp.NOTHING_SENT   # (token, frame ts) last taken by ABRP; a repeat is not a point
         self.interval = 30.0
         self.next_due = 0.0           # monotonic; 0 = due now, so the first round polls every car
 
@@ -1105,17 +1072,6 @@ def _poll_vehicle(db, client, ctx, acct) -> None:
                      "battery-derived figures will be withheld where a range-extender makes them "
                      "meaningless")
 
-        # Research / BetaTester full-signal capture (MateBetaTesterOnly build only). Logs every
-        # raw signal that CHANGED value since the last poll → a complete, timestamped history we
-        # can later correlate with the tester's logbook to map REEV signals. No-op otherwise.
-        if _research_enabled() and data.raw_signals:
-            changed = {k: v for k, v in data.raw_signals.items()
-                       if str(v) != ctx.research_last_sig.get(k)}
-            if changed:
-                db.insert_raw_signal_changes(
-                    ctx.vehicle_id, data.timestamp_ms or int(time.time() * 1000), changed)
-                ctx.research_last_sig.update({k: str(v) for k, v in changed.items()})
-
         # Persist the authoritative GPS sign the moment a signed poll refreshes it (#43),
         # so the next restart starts on dry land. Only writes when it actually changes
         # (essentially once), so there's no per-poll DB churn.
@@ -1148,20 +1104,6 @@ def _poll_vehicle(db, client, ctx, acct) -> None:
         # (silent phase-1 collector) — throttled to 24h, best-effort.
         energy_snapshots.maybe_sample(db, client, ctx.vin, api_lock=_API_LOCK,
                                       vehicle=ctx.vehicle)
-
-        # Ready-triggered "prepare now" automation — fires once per Ready OFF→ON edge,
-        # gated on the interior-temperature condition if configured. Best-effort.
-        ready_automation.maybe_trigger(db, client, data, api_lock=_API_LOCK,
-                                       vehicle=ctx.vehicle)
-
-        # ABRP live telemetry (opt-in, off by default)
-        if db.get_setting("abrp_enabled") == "1":
-            # THIS car's token (#186). One token for two cars pushed both of them into the same ABRP
-            # vehicle — two positions, two SoCs, interleaved. A car with no token sends nothing.
-            _tok = db.get_abrp_token(data.vin)
-            if _tok and abrp.is_new_point(_tok, data, ctx.abrp_last_sent):
-                if abrp.send(_tok, data, abrp.CarFacts(capacity_kwh=db.get_battery_capacity(ctx.vehicle_id))):
-                    ctx.abrp_last_sent = (_tok, data.timestamp_ms)   # a failed send leaves it for the next poll
 
         # MQTT → Home Assistant bridge (opt-in, off by default)
         acct.mqtt_service = _mqtt_tick(db, client, data, acct.mqtt_service, ctx.vehicle,
@@ -1320,8 +1262,6 @@ def _prune_daily(db) -> None:
         ret = int(db.get_setting("positions_retention_days", "0") or 0)
         if ret > 0:
             db.prune_positions(ret)
-        if _research_enabled():
-            db.prune_raw_signals(int(db.get_setting("research_retention_days", "30") or 30))
         db.prune_poll_log(7)
     except Exception as exc:  # noqa: BLE001
         log.warning("DB prune skipped: %s", exc)
@@ -1453,15 +1393,6 @@ def main():
         contexts.append(VehicleContext(db, veh, vid))
     # A car registered for the first time takes the install-wide PIN an older install still holds.
     db.migrate_install_pin()
-    # The one-car → two-cars transition is visible HERE and nowhere else, and it is where the
-    # install-wide ABRP token stops being safe: from this moment both cars would answer to it and
-    # push into a single ABRP vehicle. Hand it to the car that was here first and drop the shared
-    # key. No-op with one car, and on every start after the first.
-    db.migrate_shared_ready_automation()
-    _moved = db.migrate_shared_abrp_token()
-    if _moved:
-        log.info("ABRP: install-wide token assigned to %s (a second car was registered); "
-                 "other cars send nothing until they get their own token", _moved[-6:])
     # Start only after reset, successful authentication and vehicle registration.
     from history_service import start_history_worker
     start_history_worker(_on_login)

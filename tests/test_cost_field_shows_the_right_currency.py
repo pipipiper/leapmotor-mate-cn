@@ -87,25 +87,12 @@ def _render(name, currency, **ctx):
 
 
 def _cost_placeholder(html):
-    """The placeholder of the `cost` input, whichever of the three boxes this template holds."""
+    """The placeholder of the `cost` input this template holds."""
     import re
     m = re.search(r'<input[^>]*name="cost"[^>]*>', html)
     assert m, "no cost input in this template"
     p = re.search(r'placeholder="([^"]*)"', m.group(0))
     return p.group(1) if p else ""
-
-
-# ── the "add a past charge" form ──────────────────────────────────────────────
-
-def test_the_add_form_does_not_print_the_currency_dictionary():
-    """🔴 What was on screen: `{'name': 'I` — a Python repr, clipped by the input's width."""
-    out = _render("charges.html", GBP, stats={}, prices={}, status={}, total=0, ac_dc={},
-                  unconfirmed=0, station="", station_info=None, cal_year=2026, cal_month=8,
-                  cal_open_day=0, cal_years=[2026], highlight=0, vehicle={},
-                  charges_have_odometer=True)
-    ph = _cost_placeholder(out)
-    assert "{" not in ph and "name" not in ph, f"the placeholder is a dict: {ph!r}"
-    assert ph == "£"
 
 
 # ── the two type-and-price boxes ──────────────────────────────────────────────

@@ -32,7 +32,6 @@ def test_a_lookup_refused_after_a_restart_keeps_the_reading_stored_before(tmp_pa
     for name in ("_maybe_refresh_charge_schedule", "_write_comfort_state", "_mqtt_tick"):
         monkeypatch.setattr(PM, name, lambda *a, **k: None)
     monkeypatch.setattr(PM.energy_snapshots, "maybe_sample", lambda *a, **k: None)
-    monkeypatch.setattr(PM.ready_automation, "maybe_trigger", lambda *a, **k: None)
     db = D.Database(str(tmp_path / "restart.db"))
     vid = db.ensure_vehicle(F.VIN, "B10")
     db.set_setting("outside_temp_enabled", "1")

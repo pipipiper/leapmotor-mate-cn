@@ -52,36 +52,6 @@
   <!-- ── Column 1 (5): Vehicle & driving — Language, Vehicle, Battery, Polling, Charge detect ─ -->
   <div class="flex-1 w-full space-y-5">
 
-    {% if settings.cloud_import_available %}
-    {% call scard('cloud_import', '☁️ ' + t('cloud_import_title'), false) %}
-      <form hx-post="api/settings/cloud-import" hx-target="#cloud-import-result" class="space-y-3">
-        <label class="flex items-center gap-3 text-sm text-white">
-          <input type="checkbox" name="cloud_import_trips" value="1" {% if settings.cloud_import_trips %}checked{% endif %}>
-          {{ t('cloud_import_enabled') }}
-        </label>
-        <p class="text-xs text-slate-400">{{ t('cloud_import_help') }}</p>
-        {% if settings.cloud_import_months %}
-        <div>
-          <label for="cloud-import-from" class="block text-xs text-slate-400 mb-1.5">{{ t('cloud_import_from') }}</label>
-          <select id="cloud-import-from" name="cloud_import_from"
-                  onchange="document.getElementById('cloud-import-span').textContent = this.selectedOptions[0].dataset.span"
-                  class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-600 text-white
-                         text-sm focus:outline-none focus:border-brand cursor-pointer">
-            <option value="" data-span="{{ settings.cloud_import_span_none }}" {% if not settings.cloud_import_from %}selected{% endif %}>{{ t('cloud_import_from_current') }}</option>
-            {% for value, label, span in settings.cloud_import_months %}
-            <option value="{{ value }}" data-span="{{ span }}" {% if settings.cloud_import_from == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-          <p id="cloud-import-span" class="text-sm text-white mt-1.5">{{ settings.cloud_import_span }}</p>
-          <p class="text-xs text-slate-400 mt-1">{{ t('cloud_import_from_help') }}</p>
-        </div>
-        {% endif %}
-        <button type="submit" class="px-4 py-2 rounded-xl bg-slate-700 text-white text-sm">{{ t('cloud_import_save') }}</button>
-        <span id="cloud-import-result" role="status" class="text-sm"></span>
-      </form>
-    {% endcall %}
-    {% endif %}
-
     <!-- Language & Currency -->
     {% call scard('locale', '🌍 ' + t('setup_locale'), card_open.get('locale')) %}
       <div class="space-y-4">
@@ -94,14 +64,6 @@
               <option value="zh-CN" {% if lang == "zh-CN" %}selected{% endif %}>🇨🇳 {{ t('lang_zh_cn') }}</option>
               <option value="zh-TW" {% if lang == "zh-TW" %}selected{% endif %}>🇭🇰 {{ t('lang_zh_tw') }}</option>
               <option value="en" {% if lang == 'en' %}selected{% endif %}>🇬🇧 {{ t('lang_en') }}</option>
-              <option value="it" {% if lang == 'it' %}selected{% endif %}>🇮🇹 {{ t('lang_it') }}</option>
-              <option value="fr" {% if lang == 'fr' %}selected{% endif %}>🇫🇷 {{ t('lang_fr') }}</option>
-              <option value="de" {% if lang == 'de' %}selected{% endif %}>🇩🇪 {{ t('lang_de') }}</option>
-              <option value="pl" {% if lang == 'pl' %}selected{% endif %}>🇵🇱 {{ t('lang_pl') }}</option>
-              <option value="pt-PT" {% if lang == 'pt-PT' %}selected{% endif %}>🇵🇹 {{ t('lang_pt-PT') }}</option>
-              <option value="nl" {% if lang == 'nl' %}selected{% endif %}>🇳🇱 {{ t('lang_nl') }}</option>
-              <option value="es" {% if lang == 'es' %}selected{% endif %}>🇪🇸 {{ t('lang_es') }}</option>
-              <option value="cs" {% if lang == 'cs' %}selected{% endif %}>🇨🇿 {{ t('lang_cs') }}</option>
             </select>
           </form>
         </div>
@@ -112,7 +74,7 @@
                     class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-600 text-white
                            text-sm focus:outline-none focus:border-brand cursor-pointer">
               {% for code, c in currencies.items() %}
-              <option value="{{ code }}" {% if code == currency_code %}selected{% endif %}>{{ c.name }} ({{ c.symbol }}) — {{ code }}</option>
+              <option value="{{ code }}" {% if code == currency_code %}selected{% endif %}>{% if lang == 'en' %}{{ c.name }}{% else %}{{ c.name_zh }}{% endif %} ({{ c.symbol }}) — {{ code }}</option>
               {% endfor %}
             </select>
           </form>
@@ -139,7 +101,7 @@
                            text-sm focus:outline-none focus:border-brand cursor-pointer">
               <option value="" {% if not timezone_code %}selected{% endif %}>{{ t('timezone_auto') }}</option>
               {% for region, zones in timezones.items() %}
-              <optgroup label="{{ region }}">
+              <optgroup label="{{ timezone_region_label(region) }}">
                 {% for value, label in zones %}
                 <option value="{{ value }}" {% if value == timezone_code %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
@@ -631,60 +593,10 @@
 
   </div>
 
-  <!-- ── Column 2 (4): Integrations — ABRP, Geocoder, Wallbox, MQTT ──── -->
+  <!-- ── Column 2 (4): Integrations — Geocoder, Wallbox, MQTT ──── -->
   <div class="flex-1 w-full space-y-5">
 
-    <!-- ABRP (A Better Route Planner) -->
-    {% call scard('abrp', t('abrp_section'), card_open.get('abrp'), 'api/settings/abrp/status') %}
-      <p class="text-xs text-slate-400 mb-4">{{ t('abrp_desc') }}</p>
-      {% if settings.get('abrp_cars_without_token') %}
-      <div style="background:#1c1917;border:1px solid #a16207;border-radius:8px;padding:8px 10px;font-size:12px" class="text-amber-400 mb-2">
-        ⚠️ {{ t('abrp_car_without_token') }} <span class="text-slate-300">{{ settings.get('abrp_cars_without_token') | join(', ') }}</span>
-      </div>
-      {% endif %}
-      <form hx-post="api/settings/abrp" hx-target="#abrp-feedback" hx-swap="innerHTML" class="space-y-3">
-        <label class="flex items-center justify-between gap-3 cursor-pointer">
-          <span class="text-sm text-white">{{ t('abrp_enable') }}</span>
-          <input type="checkbox" name="abrp_enabled" value="1"
-                 {% if settings.get('abrp_enabled') == '1' %}checked{% endif %}
-                 class="w-5 h-5 accent-brand cursor-pointer flex-shrink-0">
-        </label>
-        {# ABRP is one token per VEHICLE on ABRP's side too, so two cars want two tokens (#186):
-           one token for both would feed a single ABRP vehicle two cars' positions and SoCs,
-           interleaved. Only from the second car on; a single-car install sees the field it always
-           saw. Leave it on «all cars» to keep one shared token. #}
-        {% if vehicles and vehicles|length > 1 %}
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">{{ t('account_pin_which_car') }}</label>
-          <select name="vin"
-                  class="block w-full px-2 py-1.5 rounded-lg text-sm text-white border border-slate-600 bg-slate-800 focus:outline-none focus:border-brand">
-            <option value="">{{ t('account_pin_all_cars') }}</option>
-            {% for v in vehicles %}
-            <option value="{{ v.vin }}">{{ v.car_type or v.vin[-6:] }} · {{ v.vin[-6:] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        {% endif %}
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">{{ t('abrp_token_label') }}</label>
-          <input type="password" name="abrp_token"
-                 placeholder="{% if settings.get('abrp_token_set') %}••••••••{% endif %}"
-                 autocomplete="off" spellcheck="false"
-                 class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
-                        text-sm font-mono focus:outline-none focus:border-brand">
-          <div class="text-[11px] text-slate-500 mt-1">{{ t('abrp_token_hint') }}</div>
-        </div>
-        <div class="flex items-center justify-between gap-3">
-          <div id="abrp-feedback" class="text-xs"></div>
-          <button type="submit"
-                  class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2 flex-shrink-0">
-            {{ t('abrp_save') }}
-          </button>
-        </div>
-      </form>
-    {% endcall %}
-
-    <!-- Geocoder (address lookup: Navigation, where trips start and end and charges happen, a refuel's 🧭 note) -->
+    <!-- Geocoder (address lookup: where trips start and end and charges happen, a refuel's 🧭 note) -->
     {% call scard('geocoder', t('geocoder_section'), card_open.get('geocoder')) %}
       <p class="text-xs text-slate-400 mb-4">{{ t('geocoder_desc') }}</p>
       <form hx-post="api/settings/geocoder" hx-target="#geocoder-feedback" hx-swap="innerHTML" class="space-y-3">
@@ -729,84 +641,27 @@
       </form>
     {% endcall %}
 
-    <!-- Charging-station labels (📍 on charges — idea: @hubcasale PR #48) -->
-    {% call scard('charger_locator', '⚡ ' + t('charger_locator_section'), card_open.get('charger_locator'), new_badge=(t('badge_new') if 'charger_locator' in new_sections else '')) %}
-      <p class="text-xs text-slate-400 mb-4">{{ t('charger_locator_desc') }}</p>
-      <form hx-post="api/settings/charger-locator" hx-trigger="change"
-            hx-target="#charger-locator-feedback" hx-swap="innerHTML">
-        <label class="flex items-center justify-between gap-3 cursor-pointer">
-          <div>
-            <div class="text-sm text-white">{{ t('charger_locator_enable') }}</div>
-            <div class="text-xs text-slate-400">{{ t('charger_locator_enable_desc') }}</div>
-          </div>
-          <input type="checkbox" name="charger_locator" value="1"
-                 {% if settings.charger_locator == "1" %}checked{% endif %}
-                 class="w-5 h-5 accent-brand cursor-pointer flex-shrink-0">
-        </label>
-        <div class="mt-4 pt-4 border-t border-slate-700">
-          <label class="block text-xs text-slate-400 mb-1">{{ t('charger_locator_ocm_label') }}</label>
-          <input type="password" name="charger_locator_ocm_key"
-                 autocomplete="off" spellcheck="false"
-                 placeholder="{% if settings.get('charger_locator_ocm_key_set') %}••••••••{% else %}{{ t('geocoder_key_ph') }}{% endif %}"
-                 class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
-                        text-sm font-mono focus:outline-none focus:border-brand">
-          <div class="text-[11px] text-slate-500 mt-1">{{ t('charger_locator_ocm_hint') }}</div>
+    <!-- Map display: show only charging spots the car has used at least N times. -->
+    {% call scard('map_display', '🗺️ ' + t('map_station_threshold_label'), card_open.get('map_display')) %}
+      <form hx-post="api/settings/map-station-threshold"
+            hx-target="#map-threshold-feedback" hx-swap="innerHTML">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm text-white">{{ t('map_station_threshold_label') }}</span>
+          <span class="font-bold text-brand"><span id="map-threshold-val">{{ settings.get('map_station_min_sessions', '1') }}</span></span>
         </div>
-        <div class="mt-3">
-          <label class="block text-xs text-slate-400 mb-1">{{ t('charger_locator_tomtom_label') }}</label>
-          <input type="password" name="charger_locator_tomtom_key"
-                 autocomplete="off" spellcheck="false"
-                 placeholder="{% if settings.get('charger_locator_tomtom_key_set') %}••••••••{% else %}{{ t('geocoder_key_ph') }}{% endif %}"
-                 class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
-                        text-sm font-mono focus:outline-none focus:border-brand">
-          <div class="text-[11px] text-slate-500 mt-1">{{ t('charger_locator_tomtom_hint') }}</div>
-        </div>
-        <div class="flex items-center justify-between gap-3 mt-2">
-          <div id="charger-locator-feedback" class="text-xs" style="min-height:16px"></div>
-          <button type="button"
-                  hx-post="api/settings/charger-locator/test" hx-include="closest form"
-                  hx-target="#charger-locator-feedback" hx-swap="innerHTML"
-                  hx-indicator="#charger-locator-feedback"
-                  class="border border-slate-600 text-slate-200 text-xs font-medium rounded-lg px-3 py-1.5 hover:border-brand flex-shrink-0">
-            {{ t('charger_locator_test') }}
-          </button>
-        </div>
-      </form>
-      <div class="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-700">
-        <div>
-          <div id="charger-locator-backfill-feedback" class="text-xs" style="min-height:16px"></div>
-          <div class="text-[11px] text-slate-500">{{ t('charger_locator_backfill_hint') }}</div>
-        </div>
-        <button type="button"
-                hx-post="api/settings/charger-locator/backfill"
-                hx-target="#charger-locator-backfill-feedback" hx-swap="innerHTML"
-                hx-indicator="#charger-locator-backfill-feedback"
-                class="border border-slate-600 text-slate-200 text-xs font-medium rounded-lg px-3 py-1.5 hover:border-brand flex-shrink-0">
-          {{ t('charger_locator_backfill') }}
-        </button>
-      </div>
-      <div class="mt-3 pt-3 border-t border-slate-700">
-        <form hx-post="api/settings/charger-locator/map-threshold"
-              hx-target="#map-threshold-feedback" hx-swap="innerHTML">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-sm text-white">{{ t('map_station_threshold_label') }}</span>
-            <span class="font-bold text-brand"><span id="map-threshold-val">{{ settings.get('map_station_min_sessions', '1') }}</span></span>
-          </div>
-          <input type="range" name="map_station_min_sessions" min="1" max="10" step="1"
-                 value="{{ settings.get('map_station_min_sessions', '1') }}"
-                 oninput="document.getElementById('map-threshold-val').textContent=this.value"
-                 class="w-full accent-brand cursor-pointer">
-          <div class="flex justify-between text-[10px] text-slate-600 mt-1"><span>1</span><span>10</span></div>
-          <div class="text-[11px] text-slate-500 mt-1">{{ t('map_station_threshold_hint') }}</div>
-          <div id="map-threshold-feedback" class="text-xs mt-1" style="min-height:16px"></div>
-        
+        <input type="range" name="map_station_min_sessions" min="1" max="10" step="1"
+               value="{{ settings.get('map_station_min_sessions', '1') }}"
+               oninput="document.getElementById('map-threshold-val').textContent=this.value"
+               class="w-full accent-brand cursor-pointer">
+        <div class="flex justify-between text-[10px] text-slate-600 mt-1"><span>1</span><span>10</span></div>
+        <div class="text-[11px] text-slate-500 mt-1">{{ t('map_station_threshold_hint') }}</div>
         <div class="flex items-center justify-end mt-3">
+          <div id="map-threshold-feedback" class="text-xs mr-auto" style="min-height:16px"></div>
           <button type="submit" class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2 flex-shrink-0">
-            {{ t('retention_save') }}
+            {{ t('save') }}
           </button>
         </div>
       </form>
-      </div>
     {% endcall %}
 
     <!-- Wallbox -->
@@ -1080,7 +935,7 @@
           {% if diag.last_poll_age_min is not none %}{{ diag.last_poll_age_min }} min · SoC {{ diag.last_soc | nice }}% · {{ diag.last_gear }}{% if diag.last_charging %} · ⚡{% endif %}{% else %}{{ t('diag_never') }}{% endif %}
         </div>
         <div>{{ t('diag_integrations') }}:
-          {% for key, on in [('MQTT', diag.features.mqtt), ('Wallbox', diag.features.wallbox), ('HA', diag.features.ha), ('ABRP', diag.features.abrp), ('Add-on', diag.features.addon)] %}<span class="{% if on %}text-emerald-400{% else %}text-slate-600{% endif %}">{{ key }} {% if on %}✓{% else %}✗{% endif %}</span>{% if not loop.last %} · {% endif %}{% endfor %}
+          {% for key, on in [('MQTT', diag.features.mqtt), ('Wallbox', diag.features.wallbox), ('HA', diag.features.ha), ('Add-on', diag.features.addon)] %}<span class="{% if on %}text-emerald-400{% else %}text-slate-600{% endif %}">{{ key }} {% if on %}✓{% else %}✗{% endif %}</span>{% if not loop.last %} · {% endif %}{% endfor %}
         </div>
       </div>
 

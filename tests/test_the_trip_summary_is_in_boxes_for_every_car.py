@@ -103,7 +103,7 @@ def _env():
 
 def _render(**ctx):
     base = dict(trip=_reev_trip(), t=lambda k, **kw: k, request=_Request(), page="trips",
-                version="test", demo=False, is_reev=True, research=False,
+                version="test", demo=False, is_reev=True,
                 currency={"name": "Euro", "symbol": "€", "pos": "after", "dec": 2},
                 prev_trip_id=None, next_trip_id=None)
     base.update(ctx)
@@ -257,11 +257,12 @@ def test_the_generator_distance_keeps_its_floor_note_outside_the_boxes():
     assert "62.0 km" in block.all_text()
 
 
-def test_the_electric_rate_of_a_generator_trip_stays_off_the_official_build():
+def test_the_electric_rate_of_a_generator_trip_is_shown_and_marked():
     """46 kWh/100km on a trip where the generator refilled the pack is not the car's consumption.
-    Today's rule stands in the new card: the research line on the beta build, nothing elsewhere."""
-    assert "46 kWh/100km" not in _summary(_render(research=False)).all_text()
-    assert "46 kWh/100km" in _summary(_render(research=True)).all_text()
+    It stays visible — a range-extender owner needs the electric half — but only under the ⚡ mark
+    that sets it apart from the ordinary consumption line."""
+    card = _summary(_render())
+    assert "46 kWh/100km" in card.all_text()
 
 
 def test_the_driving_mode_bar_is_not_there():

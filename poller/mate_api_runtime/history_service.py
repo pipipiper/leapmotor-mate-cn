@@ -8,8 +8,6 @@ _guard = threading.Lock()
 
 def start_history_worker(on_login=None):
     """`on_login` hears every login the worker's own client spends — see history_worker."""
-    if os.environ.get("MATE_MARKET", "CN").upper() == "CN":
-        return  # CN has no verified individual cloud-history contract.
     global _thread
     # Cloud history is a READ: it does not follow the COMMAND qualification. An account
     # retained on the previous client — anything that is not a pure B10 account — still
@@ -23,6 +21,7 @@ def start_history_worker(on_login=None):
             return
         from history_worker import sync_once
         from api_v2_bridge import is_refused_password
+        from cn_backend import ChinaAuthRequired
         def loop():
             stop = threading.Event()
             while True:
@@ -33,7 +32,7 @@ def start_history_worker(on_login=None):
                     logging.getLogger('mate.history').warning('History sync unavailable (%s)', type(error).__name__)
                     # A refused password stays refused until it is changed, and a change restarts
                     # the poller: asking every 5 minutes only piled up refusals (#411).
-                    if is_refused_password(error):
+                    if is_refused_password(error) or isinstance(error, ChinaAuthRequired):
                         wait = 3600
                 stop.wait(wait)
         _thread = threading.Thread(target=loop, name='mate-cloud-history', daemon=True)

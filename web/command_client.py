@@ -273,6 +273,7 @@ class LeapmotorSession:
         self._status_car_type: dict[str, str] = {}
         self._status_fallback_tried: set[str] = set()
         self._cn_picture_cache = CarPictureCache()
+        self._cn_charge_valid_start_cache: dict[str, str] = {}
 
     def _target(self):
         """The car the picker is on — resolved on EVERY use, never frozen at login.
@@ -1026,7 +1027,7 @@ def detect_vehicle(user: str, pwd: str, pin: str) -> dict:
     to change; `vehicles` is the list the wizard walks."""
     from api_backend import is_china
     if is_china():
-        return {"error": "請使用中國區短信登入"}
+        return {"error": "请使用中国区短信登录"}
     try:
         api = LeapmotorApiClient(
             username=user,
@@ -1650,6 +1651,183 @@ def get_daily_energy(start, end):
     with _session._lock:
         _session._connect()
         return _session._api.get_daily_energy(_session._target(), start, end)
+
+
+def get_cn_charge_statistics(mode="7d", month="", year=""):
+    import calendar
+    import re
+    from datetime import date, datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    mode = (mode or "7d").strip().lower()
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    with _session._lock:
+        _session._connect()
+        car = _session._target()
+        car_key = (getattr(car, "vin", None) or str(car or "")).lower()
+        valid_cache = getattr(_session, "_cn_charge_valid_start_cache", None)
+        if valid_cache is None:
+            valid_cache = {}
+            _session._cn_charge_valid_start_cache = valid_cache
+        valid_start = valid_cache.get(car_key)
+        if not valid_start and hasattr(_session._api, "get_charge_valid_start"):
+            try:
+                vail = _session._api.get_charge_valid_start(car) or {}
+                if vail.get("vail_date"):
+                    valid_start = vail["vail_date"]
+                    valid_cache[car_key] = valid_start
+            except Exception:
+                valid_start = None
+        if mode == "7d":
+            start = today - timedelta(days=6)
+            end = today
+            stats = _session._api.get_charge_statistics_days(car, start.isoformat(), end.isoformat())
+            by_day = {item["day"]: item["energy_kwh"] for item in stats["items"]}
+            series = []
+            for offset in range(7):
+                day = start + timedelta(days=offset)
+                series.append({
+                    "date": day.isoformat(),
+                    "label": f"{day.month}/{day.day}",
+                    "energy_kwh": by_day.get(day.isoformat(), 0.0),
+                })
+            period = "7d"
+        elif mode == "month":
+            period = (month or today.strftime("%Y-%m")).strip()
+            if not re.fullmatch(r"20[0-9]{2}-(0[1-9]|1[0-2])", period):
+                raise ValueError("invalid month")
+            y, m = int(period[:4]), int(period[5:7])
+            last_day = calendar.monthrange(y, m)[1]
+            start = date(y, m, 1)
+            end = date(y, m, last_day)
+            stats = _session._api.get_charge_statistics_days(car, start.isoformat(), end.isoformat())
+            by_day = {item["day"]: item["energy_kwh"] for item in stats["items"]}
+            series = []
+            for d in range(1, last_day + 1):
+                day = date(y, m, d)
+                series.append({
+                    "date": day.isoformat(),
+                    "label": str(d),
+                    "energy_kwh": by_day.get(day.isoformat(), 0.0),
+                })
+        elif mode == "year":
+            period = (year or str(today.year)).strip()
+            if not re.fullmatch(r"20[0-9]{2}", period):
+                raise ValueError("invalid year")
+            start = date(int(period), 1, 1)
+            end = date(int(period), 12, 31)
+            stats = _session._api.get_charge_statistics_year(car, period)
+            by_month = {}
+            for item in stats.get("items") or []:
+                m_key = item.get("month")
+                if m_key:
+                    by_month[m_key] = round(by_month.get(m_key, 0.0) + float(item.get("energy_kwh") or 0.0), 3)
+            if not by_month and (stats.get("total_count") or stats.get("total_energy_kwh")) and hasattr(_session._api, "get_charge_statistics_days"):
+                day_stats = _session._api.get_charge_statistics_days(car, start.isoformat(), end.isoformat())
+                for item in day_stats.get("items") or []:
+                    m_key = item.get("month")
+                    if m_key:
+                        by_month[m_key] = round(by_month.get(m_key, 0.0) + float(item.get("energy_kwh") or 0.0), 3)
+            series = [
+                {
+                    "date": f"{period}-{m:02d}",
+                    "label": str(m),
+                    "energy_kwh": by_month.get(f"{period}-{m:02d}", 0.0),
+                }
+                for m in range(1, 13)
+            ]
+        else:
+            raise ValueError("invalid mode")
+    return {
+        "mode": mode,
+        "period": period,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "today": today.isoformat(),
+        "valid_start": valid_start,
+        "total_count": stats["total_count"],
+        "total_energy_kwh": stats["total_energy_kwh"],
+        "fast_charge_percent": stats["fast_charge_percent"],
+        "series": series,
+    }
+
+
+def get_cn_charge_details(day="", month=""):
+    import re
+    from datetime import date, datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    zone = ZoneInfo("Asia/Shanghai")
+    day_text = (day or "").strip()
+    month_text = (month or "").strip()
+    if day_text:
+        if not re.fullmatch(r"20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])", day_text):
+            raise ValueError("invalid date")
+        start = date.fromisoformat(day_text)
+        end = start + timedelta(days=1)
+        kind, period = "day", day_text
+    elif month_text:
+        if not re.fullmatch(r"20[0-9]{2}-(0[1-9]|1[0-2])", month_text):
+            raise ValueError("invalid month")
+        y, m = int(month_text[:4]), int(month_text[5:7])
+        start = date(y, m, 1)
+        end = date(y + m // 12, m % 12 + 1, 1)
+        kind, period = "month", month_text
+    else:
+        raise ValueError("missing date or month")
+
+    with _session._lock:
+        _session._connect()
+        car = _session._target()
+        raw_records = _session._api.get_charge_records(car, start.isoformat(), end.isoformat())
+
+    items = []
+    for row in raw_records or []:
+        if not isinstance(row, dict):
+            continue
+        start_ms = row.get("chargeEarliestTs")
+        if start_ms is None:
+            start_ms = row.get("chargeGunStartTs")
+        end_ms = row.get("chargeLatestTs")
+        if end_ms is None:
+            end_ms = row.get("chargeGunEndTs")
+        if start_ms is None:
+            continue
+        start_ms = int(start_ms)
+        end_ms = int(end_ms) if end_ms is not None else start_ms
+        start_dt = datetime.fromtimestamp(start_ms / 1000, zone)
+        end_dt = datetime.fromtimestamp(end_ms / 1000, zone)
+        raw_type = str(row.get("chargeType") or "").upper()
+        charge_type = "fast" if raw_type in ("QUICK", "FAST") else "slow" if raw_type == "SLOW" else "unknown"
+        try:
+            energy = round(float(row.get("chargeInEnergy") or 0.0), 2)
+        except (TypeError, ValueError):
+            energy = 0.0
+        duration_min = max(0, (end_ms - start_ms) // 60000)
+        items.append({
+            "start_ms": start_ms,
+            "end_ms": end_ms,
+            "started_at": start_dt.isoformat(),
+            "ended_at": end_dt.isoformat(),
+            "date_label": start_dt.strftime("%Y/%m/%d"),
+            "start_time": start_dt.strftime("%H:%M"),
+            "end_time": end_dt.strftime("%H:%M"),
+            "cross_day": start_dt.date() != end_dt.date(),
+            "end_date_label": end_dt.strftime("%m/%d"),
+            "duration_min": duration_min,
+            "energy_kwh": energy,
+            "charge_type": charge_type,
+            "raw_charge_type": raw_type or None,
+        })
+    items.sort(key=lambda item: item["start_ms"], reverse=True)
+    return {
+        "kind": kind,
+        "period": period,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "count": len(items),
+        "items": items,
+    }
 
 
 def get_fresh_snapshot(vin=None):

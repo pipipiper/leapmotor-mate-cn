@@ -40,9 +40,8 @@ _ENDED = ("UPDATE charges SET ended_at=?, end_soc=100, energy_added_kwh=15 WHERE
           ((PLUGGED_IN + timedelta(minutes=51)).isoformat(),))
 _NEXT = ("INSERT INTO charges (id, vehicle_id, started_at, start_soc) VALUES (10, 1, ?, 99.0)",
          ((PLUGGED_IN + timedelta(minutes=52)).isoformat(),))
-# What a reader can be in the middle of: adding a past charge by hand, or the merge dialog, open as its button opens it.
-_BUSY = {"a field in use": ("() => { document.getElementById('manual-charge-form').classList.remove('hidden');"
-                            " document.querySelector('#manual-charge-form [name=energy]').focus({ preventScroll: true }) }",
+# What a reader can be in the middle of: editing the charge limit input, or the merge dialog, open as its button opens it.
+_BUSY = {"a field in use": ("() => { document.getElementById('cl-input').focus({ preventScroll: true }) }",
                             "() => document.activeElement.blur()"),
          "the merge dialog open": ("() => { document.getElementById('charge-merge-modal').style.display = 'flex' }",
                                    "() => { document.getElementById('charge-merge-modal').style.display = 'none' }")}
@@ -194,21 +193,6 @@ def _a_note(page, text):
     page.click("#cnote-edit-8")
     page.fill("#cnote-8", text)
     _left(page)
-
-
-@pytest.mark.parametrize("folded", [False, True], ids=["left open", "its form folded away"])
-def test_a_past_charge_typed_in_and_left_holds_the_reload(charges, folded):
-    page, ends = charges
-    page.click("text=Add a past charge")
-    page.fill("#manual-charge-form [name=energy]", "12.34")
-    _left(page)
-    if folded:
-        page.click("text=Add a past charge")
-    ends()
-    assert _stays(page), "the end of the charge took a past charge that was not added yet"
-    assert page.input_value("#manual-charge-form [name=energy]") == "12.34"
-
-
 def test_a_note_that_is_not_saved_holds_the_reload_and_a_saved_one_lets_it_go(charges):
     page, ends = charges
     _a_note(page, "in the shade")

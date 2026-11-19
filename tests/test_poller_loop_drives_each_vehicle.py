@@ -134,7 +134,6 @@ def loop(tmp_path, monkeypatch):
         for name in ("_maybe_refresh_charge_schedule",):
             monkeypatch.setattr(PM, name, lambda *a, **k: None)
         monkeypatch.setattr(PM.energy_snapshots, "maybe_sample", lambda *a, **k: None)
-        monkeypatch.setattr(PM.ready_automation, "maybe_trigger", lambda *a, **k: None)
         monkeypatch.setattr(PM, "_mqtt_tick", lambda db, c, d, s: None)
         monkeypatch.setattr(PM, "load_config", lambda db: {
             "username": "u", "password": "p", "pin": "1234",
@@ -258,7 +257,7 @@ def test_the_context_holds_what_the_locals_held():
     counters, GPS signs and raw-signal memory live here, so a second car gets its own set."""
     ctx = PM.VehicleContext.__new__(PM.VehicleContext)
     for field in ("vehicle", "vehicle_id", "vin", "recorder", "persisted_signs",
-                  "empty_status_count", "poll_error_count", "research_last_sig",
+                  "empty_status_count", "poll_error_count",
                   "interval", "next_due"):
         assert field in PM.VehicleContext.__slots__, f"{field} must live on the context"
     assert "recorder" in PM.VehicleContext.__slots__
@@ -272,11 +271,10 @@ def test_two_contexts_do_not_share_a_thing(tmp_path):
     b = PM.VehicleContext(database, _Vehicle("VIN_B", "T03"), 2)
     a.empty_status_count = 7
     a.poll_error_count = 4
-    a.research_last_sig["3235"] = "1"
     a.persisted_signs["lon"] = -1.0
     a.next_due = 999.0
     assert (b.empty_status_count, b.poll_error_count) == (0, 0)
-    assert b.research_last_sig == {} and b.persisted_signs == {}
+    assert b.persisted_signs == {}
     assert b.next_due == 0.0, "a fresh car is due immediately, not at the other one's deadline"
     assert a.recorder is not b.recorder
     assert (a.vin, b.vin) == ("VIN_A", "VIN_B")

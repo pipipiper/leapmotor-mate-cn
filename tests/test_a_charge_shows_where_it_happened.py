@@ -131,19 +131,11 @@ def test_assigning_a_place_and_taking_it_back_redraw_the_line(car):
     assert where(back, cid) == "📍 Garage (charging place)"
 
 
-def test_relocating_or_typing_a_station_keeps_the_address(car, monkeypatch):
-    import charger_locator
+def test_typing_a_station_keeps_the_address(car):
     address(WORK, road="Corso Francia", locality="Torino")
     cid = charge(car, WORK)
-    monkeypatch.setattr(charger_locator, "find_station_candidates",
-                        lambda lat, lon: ([{"name": "Ionity Torino", "url": None}], True))
-    found = car.client.post(f"/api/charges/{cid}/locate").text
-    assert where(found, cid) == "📍 Ionity Torino · Corso Francia, Torino" and osm_marked(found, cid)
     typed = car.client.post(f"/api/charges/{cid}/locate/manual", data={"name": "Colonnina Lingotto"}).text
     assert where(typed, cid) == "📍 Colonnina Lingotto · Corso Francia, Torino"
-    picked = car.client.post(f"/api/charges/{cid}/locate/confirm", data={"name": ""}).text
-    assert where(picked, cid) == "📍 Corso Francia, Torino", "an empty pick is a lookup that found nothing"
-    assert where(car.client.get(f"/api/charges/{cid}/locate/cancel").text, cid) == "📍 Corso Francia, Torino"
 
 
 # ── the 🧭 ──────────────────────────────────────────────────────────────────────
@@ -171,8 +163,9 @@ def test_a_missing_address_is_looked_up_on_request(car, monkeypatch):
     car.set_setting("place_lookup", "0")
     cid = charge(car, WORK, station="Ionity Torino")
     assert look_up(cid) in drawer(car)
+    providers.asked.clear()          # the page's own sweep is not the request under test
     redrawn = car.client.post(f"/api/charges/{cid}/address").text
-    assert providers.calls() == [spot(*WORK)]
+    assert providers.calls().count(spot(*WORK)) == 1
     assert where(redrawn, cid) == "📍 Ionity Torino · Corso Francia, Torino" and osm_marked(redrawn, cid)
     assert look_up(cid) not in redrawn
 

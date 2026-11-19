@@ -61,6 +61,7 @@ def _trip(**over):
          "ec_kwh": 4.8, "ec_stable": 1, "ec_driving": 4.0, "ec_ac": 0.5, "ec_other": 0.3,
          "efficiency_kwh_100km": None, "cost": 1.34, "fuel_cost": 11.14, "cost_total": 12.48,
          "cost_per_kwh": 0.279, "fuel_used_l": 5.28, "fuel_l_100km": 5.4, "engine_ran": True,
+         "reev_elec_kwh_100km": None,
          "engine_km": 62.0, "fuel_start_pct": 30.8, "fuel_end_pct": 20.3, "reconstructed": 0,
          "positions": [], "start_odometer_km": 12000.0, "end_odometer_km": 12097.0,
          "avg_speed_kmh": 83.0, "median_speed_kmh": 88.0, "max_speed_kmh": 130.0, "max_power_kw": None, "max_regen_kw": None,
@@ -99,7 +100,7 @@ def _env():
 
 def _render(**ctx):
     base = dict(trip=_trip(), t=lambda k, **kw: k, request=_Request(), page="trips",
-                version="test", demo=False, is_reev=True, research=False,
+                version="test", demo=False, is_reev=True,
                 currency={"name": "Euro", "symbol": "€", "pos": "after", "dec": 2},
                 prev_trip_id=None, next_trip_id=None)
     base.update(ctx)

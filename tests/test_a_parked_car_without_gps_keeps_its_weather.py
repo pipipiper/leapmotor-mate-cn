@@ -114,7 +114,6 @@ def test_the_first_poll_after_a_restart_stores_the_weather_where_the_car_parked(
     for name in ("_maybe_refresh_charge_schedule", "_write_comfort_state", "_mqtt_tick"):
         monkeypatch.setattr(PM, name, lambda *a, **k: None)
     monkeypatch.setattr(PM.energy_snapshots, "maybe_sample", lambda *a, **k: None)
-    monkeypatch.setattr(PM.ready_automation, "maybe_trigger", lambda *a, **k: None)
 
     db = D.Database(str(tmp_path / "restart.db"))
     vid = db.ensure_vehicle(F.VIN, "B10")

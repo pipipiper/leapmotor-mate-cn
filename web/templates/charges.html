@@ -11,13 +11,23 @@
     <h1 class="text-2xl font-bold text-white">{{ t('charges_title') }}</h1>
     <p class="text-slate-400 text-sm mt-1">{{ total }} {{ t('sessions_recorded') }}</p>
   </div>
-  {% if total %}
+  {% if total or (china_market() and not demo) %}
   <div class="shrink-0 flex items-center gap-2 flex-wrap justify-end">
+    {% if china_market() and not demo %}
+    <button type="button" id="cn-charge-sync-btn"
+            class="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer">
+      <span>☁️</span>
+      <span>{{ t('cn_charge_sync_btn') }}</span>
+    </button>
+    <span id="cn-charge-sync-status" class="text-xs text-slate-400"></span>
+    {% endif %}
+    {% if total %}
     <a href="api/export/charges.csv" download
        class="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 hover:border-brand/50 transition-all">
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
       {{ t('export_csv') }}
     </a>
+    {% endif %}
   </div>
   {% endif %}
 </div>
@@ -153,82 +163,585 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
 });
 </script>
 
-<!-- Add a past charge by hand (#87) — backfill pre-Mate sessions so the totals are complete -->
-<div class="card mb-6">
-  <button type="button" onclick="document.getElementById('manual-charge-form').classList.toggle('hidden')"
-          class="flex items-center gap-2 text-sm font-medium text-brand hover:opacity-80">
-    <span class="text-lg">➕</span> {{ t('manual_charge_title') }}
-  </button>
-  <div id="manual-charge-form" class="hidden mt-3 pt-3 border-t border-slate-700/60">
-    <p class="text-[11px] text-slate-500 mb-3">{{ t('manual_charge_hint') }}</p>
-    <form hx-post="api/charges/manual" hx-target="#mc-result" hx-swap="innerHTML" hx-indicator="#mc-spin"
-          hx-on::after-request="if(event.detail.successful){this.reset();setTimeout(function(){location.reload();},800);}"
-          class="flex flex-wrap items-end gap-3">
-      <label class="text-xs text-slate-400">{{ t('manual_charge_when') }}
-        <span class="flex gap-1 mt-1">
-          <input type="date" name="date" required class="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5">
-          <input type="time" name="time" value="12:00" class="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5">
-        </span>
-      </label>
-      <label class="text-xs text-slate-400">{{ t('manual_charge_energy') }}
-        <input type="number" name="energy" min="0" step="0.01" required placeholder="kWh"
-               class="block mt-1 w-24 bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5">
-      </label>
-      <label class="text-xs text-slate-400">{{ t('manual_charge_cost') }}
-        {# `currency` is the metadata DICT, not a symbol: printed bare it rendered
-           `{'name': 'Euro', 'symbol': '€', …}`, clipped by the input to `{'name': 'I`. There since
-           this form was written (#87, v1.30.0) and never seen, because nothing renders a template
-           in the suite unless a test asks it to. #}
-        <input type="number" name="cost" min="0" step="0.01" placeholder="{{ currency.symbol }}"
-               class="block mt-1 w-24 bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5">
-      </label>
-      <label class="text-xs text-slate-400">{{ t('manual_charge_type') }}
-        {# #309 — the add form offers the same five types as the edit panel; offering two here
-           and five there would let a charge be typed as something it could not be created as. #}
-        <select name="charge_type" class="block mt-1 bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5">
-          {% for key, meta in charge_types.items() %}
-          <option value="{{ key }}">{{ meta.icon }} {{ meta.label }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      {# #237 — the car's total distance at that charge. It is offered ONLY where the poller has
-         already added the column, for the same reason the gross-kWh field is (v3.6.6, found on
-         Silvio's own instance): a field that silently drops what you type into it is worse than no
-         field. Typed in the reader's own unit; main.py converts to km before storing. #}
-      {% if charges_have_odometer %}
-      <label class="text-xs text-slate-400">{{ t('manual_charge_odometer') }}
-        <input type="number" name="odometer" min="0" step="1" placeholder="{{ dist_unit() }}"
-               class="block mt-1 w-24 bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5">
-      </label>
-      {% endif %}
-      <button type="submit" class="px-4 py-2 rounded-lg bg-brand text-white text-sm font-semibold hover:opacity-90 active:scale-95 transition">{{ t('manual_charge_add') }}</button>
-      <span id="mc-spin" class="htmx-indicator text-brand text-xs">⏳</span>
-      <span id="mc-result" class="text-sm font-medium"></span>
-    </form>
-  </div>
-  <!-- Bulk import from CSV (#111) -->
-  <div class="mt-3 pt-3 border-t border-slate-700/60">
-    <button type="button" onclick="document.getElementById('csv-import-form').classList.toggle('hidden')"
-            class="flex items-center gap-2 text-sm font-medium text-brand hover:opacity-80">
-      <span class="text-lg">📥</span> {{ t('import_title') }}
+{% if china_market() and not demo %}
+<section id="cn-charge-stats-card" class="card mb-6">
+  <div class="grid grid-cols-3 rounded-xl border border-slate-700/80 bg-slate-900/80 p-1 text-xs mb-4">
+    <button type="button" data-cn-mode="7d"
+            class="cn-charge-tab px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer bg-slate-800 text-white shadow-sm">
+      {{ t('cn_charge_tab_7d') }}
     </button>
-    <div id="csv-import-form" class="hidden mt-3">
-      <p class="text-[11px] text-slate-500 mb-2" style="white-space:pre-line">{{ t('import_hint') }}</p>
-      <a href="api/charges/import-template.csv" download
-         class="inline-flex items-center gap-1 text-xs text-brand hover:opacity-80 mb-3">⬇ {{ t('import_template') }}</a>
-      <form hx-post="api/charges/import" hx-encoding="multipart/form-data"
-            hx-target="#import-result" hx-swap="innerHTML" hx-indicator="#import-spin"
-            hx-on::after-request="if(event.detail.successful && !(event.detail.xhr.response||'').includes('⚠')){setTimeout(function(){location.reload();},1500);}"
-            class="flex flex-wrap items-center gap-3">
-        <input type="file" name="file" accept=".csv,text/csv" required
-               class="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-700 file:text-white file:text-xs file:cursor-pointer">
-        <button type="submit" class="px-4 py-2 rounded-lg bg-brand text-white text-sm font-semibold hover:opacity-90 active:scale-95 transition">{{ t('import_btn') }}</button>
-        <span id="import-spin" class="htmx-indicator text-brand text-xs">⏳</span>
-      </form>
-      <div id="import-result" class="text-sm mt-2"></div>
+    <button type="button" data-cn-mode="month"
+            class="cn-charge-tab px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer text-slate-400 hover:text-white">
+      {{ t('cn_charge_tab_month') }}
+    </button>
+    <button type="button" data-cn-mode="year"
+            class="cn-charge-tab px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer text-slate-400 hover:text-white">
+      {{ t('cn_charge_tab_year') }}
+    </button>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+    <h2 class="font-semibold text-white flex items-center gap-2">
+      <span>⚡</span>
+      <span>{{ t('cn_charge_stats_title') }}</span>
+    </h2>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span id="cn-charge-period-label" class="text-xs text-slate-400">{{ t('cn_charge_tab_7d') }}</span>
+      <select id="cn-charge-month"
+              class="hidden bg-slate-800 border border-slate-600 text-white text-xs rounded-lg px-2.5 py-1.5">
+        {% set cur_ym = cn_today.strftime('%Y-%m') if cn_today is defined else '2026-11' %}
+        <option value="{{ cur_ym }}" selected>{{ cur_ym }}</option>
+      </select>
+      <select id="cn-charge-year"
+              class="hidden bg-slate-800 border border-slate-600 text-white text-xs rounded-lg px-2.5 py-1.5">
+        {% set cur_year = cn_today.year if cn_today is defined else 2026 %}
+        {% for y in range(cur_year, cur_year - 4, -1) %}
+        <option value="{{ y }}" {% if loop.first %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" id="cn-charge-stats-refresh"
+              class="px-2.5 py-1.5 rounded-lg text-xs border border-slate-600 text-slate-300 hover:border-brand hover:text-white transition-colors cursor-pointer">
+        {{ t('cn_energy_reload') }}
+      </button>
     </div>
   </div>
-</div>
+  <p class="text-xs text-slate-400 mb-4">{{ t('cn_charge_stats_hint') }}</p>
+
+  <div class="grid grid-cols-3 gap-2 sm:gap-3 rounded-xl border border-slate-700/70 bg-slate-900/60 px-2 sm:px-3 py-3 mb-4">
+    <div class="text-center">
+      <div class="text-lg sm:text-xl font-bold text-emerald-400">
+        <span id="cn-cs-energy">—</span>
+        <span class="text-xs font-normal text-slate-400">{{ t('cn_charge_energy_unit') }}</span>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-0.5">{{ t('cn_charge_total_kwh') }}</div>
+    </div>
+    <div class="text-center border-x border-slate-700/60">
+      <div class="text-lg sm:text-xl font-bold text-white">
+        <span id="cn-cs-count">—</span>{% if t('cn_charge_count_unit') %} <span class="text-xs font-normal text-slate-400">{{ t('cn_charge_count_unit') }}</span>{% endif %}
+      </div>
+      <div class="text-[11px] text-slate-400 mt-0.5">{{ t('cn_charge_total_count') }}</div>
+    </div>
+    <div class="text-center">
+      <div class="text-lg sm:text-xl font-bold text-amber-400">
+        <span id="cn-cs-fast">—</span>
+        <span class="text-xs font-normal text-slate-400">%</span>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-0.5">{{ t('cn_charge_fast_pct') }}</div>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between gap-2 mb-1">
+    <span class="text-[11px] text-slate-400">kWh</span>
+    <span id="cn-charge-stats-status" class="text-xs text-slate-400" role="status"></span>
+  </div>
+  <div id="cn-charge-stats-scroll" class="overflow-x-auto pb-1">
+    <div id="cn-charge-stats-chart-wrap" style="min-width: 100%;">
+      <div id="cn-charge-stats-chart" style="min-height: 220px;"></div>
+    </div>
+  </div>
+
+  <div id="cn-charge-details-section" class="mt-5 pt-4 border-t border-slate-700/60">
+    <div class="flex items-center justify-between gap-2 mb-3">
+      <div class="flex items-center gap-2 min-w-0">
+        <h3 class="text-sm font-semibold text-white">{{ t('cn_charge_detail_title') }}</h3>
+        <span id="cn-charge-details-target" class="text-xs text-slate-400 truncate"></span>
+      </div>
+      <button type="button" id="cn-charge-month-all"
+              class="hidden px-2.5 py-1 rounded-lg text-xs border border-slate-600 text-slate-300 hover:border-emerald-500/60 hover:text-emerald-300 transition-colors cursor-pointer">
+        {{ t('cn_charge_month_all') }}
+      </button>
+    </div>
+    <div id="cn-charge-details-list" class="space-y-2 text-sm text-slate-400">
+      <div class="py-4 text-center text-xs text-slate-500">{{ t('cn_charge_detail_pick_hint') }}</div>
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  var syncBtn = document.getElementById('cn-charge-sync-btn');
+  var syncStatus = document.getElementById('cn-charge-sync-status');
+  if (syncBtn) {
+    syncBtn.addEventListener('click', async function () {
+      syncBtn.disabled = true;
+      syncStatus.textContent = {{ t('cn_charge_syncing')|tojson }};
+      syncStatus.className = 'text-xs text-slate-400';
+      try {
+        var res = await fetch('api/cn/charges/sync', { method: 'POST' });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || {{ t('cn_energy_unavailable')|tojson }});
+        if ((data.inserted || 0) > 0) {
+          syncStatus.textContent = {{ t('cn_charge_sync_added')|tojson }}.replace('{n}', String(data.inserted));
+          syncStatus.className = 'text-xs text-emerald-400';
+          setTimeout(function () { location.reload(); }, 700);
+        } else {
+          syncStatus.textContent = {{ t('cn_charge_sync_none')|tojson }};
+          syncStatus.className = 'text-xs text-slate-300';
+          if (typeof window._cnReloadChargeStats === 'function') {
+            window._cnReloadChargeStats(true);
+          }
+        }
+      } catch (err) {
+        syncStatus.textContent = err && err.message ? err.message : {{ t('cn_energy_unavailable')|tojson }};
+        syncStatus.className = 'text-xs text-red-400';
+      } finally {
+        syncBtn.disabled = false;
+      }
+    });
+  }
+
+  var card = document.getElementById('cn-charge-stats-card');
+  if (!card) return;
+  var I18N = {
+    loading: {{ t('cn_energy_loading')|tojson }},
+    unavailable: {{ t('cn_energy_unavailable')|tojson }},
+    noData: {{ t('cn_charge_no_data')|tojson }},
+    monthUnit: {{ t('cn_charge_month_unit')|tojson }},
+    monthFmt: {{ t('cn_charge_month_fmt')|tojson }},
+    yearFmt: {{ t('cn_charge_year_fmt')|tojson }},
+    detailEmpty: {{ t('cn_charge_detail_empty')|tojson }},
+    detailLoading: {{ t('cn_charge_detail_loading')|tojson }},
+    detailNoMore: {{ t('cn_charge_detail_no_more')|tojson }},
+    detailEnergy: {{ t('cn_charge_detail_energy')|tojson }},
+    detailDuration: {{ t('cn_charge_detail_duration')|tojson }},
+    detailType: {{ t('cn_charge_detail_type')|tojson }},
+    typeFast: {{ t('cn_charge_type_fast')|tojson }},
+    typeSlow: {{ t('cn_charge_type_slow')|tojson }},
+    typeUnknown: {{ t('cn_charge_type_unknown')|tojson }}
+  };
+
+  var mode = '7d';
+  var currentSeries = [];
+  var selectedKey = '';
+  var monthAll = false;
+  var lastToday = {{ (cn_today.isoformat() if cn_today is defined else '2026-11-19')|tojson }};
+  var lastValidStart = '';
+  var detailsSeq = 0;
+
+  var periodLabelEl = document.getElementById('cn-charge-period-label');
+  var monthSelect = document.getElementById('cn-charge-month');
+  var yearSelect = document.getElementById('cn-charge-year');
+  var refreshBtn = document.getElementById('cn-charge-stats-refresh');
+  var statusEl = document.getElementById('cn-charge-stats-status');
+  var scrollEl = document.getElementById('cn-charge-stats-scroll');
+  var chartWrapEl = document.getElementById('cn-charge-stats-chart-wrap');
+  var chartEl = document.getElementById('cn-charge-stats-chart');
+  var energyEl = document.getElementById('cn-cs-energy');
+  var countEl = document.getElementById('cn-cs-count');
+  var fastEl = document.getElementById('cn-cs-fast');
+  var detailsTargetEl = document.getElementById('cn-charge-details-target');
+  var monthAllBtn = document.getElementById('cn-charge-month-all');
+  var detailsListEl = document.getElementById('cn-charge-details-list');
+  var tabs = card.querySelectorAll('.cn-charge-tab');
+
+  function fmtKwh(v) {
+    var n = Number(v || 0);
+    return n % 1 === 0 ? String(n) : n.toFixed(1);
+  }
+
+  function fmtYear(y) {
+    return I18N.yearFmt.replace('{y}', String(y));
+  }
+
+  function fmtMonth(ym) {
+    var parts = String(ym || '').split('-');
+    if (parts.length !== 2) return ym || '';
+    return I18N.monthFmt.replace('{y}', parts[0]).replace('{m}', String(Number(parts[1])));
+  }
+
+  function rebuildPickers(todayIso, validStartIso) {
+    var todayParts = String(todayIso || '2026-11-19').split('-');
+    var endY = Number(todayParts[0]) || 2026;
+    var endM = Number(todayParts[1]) || 11;
+    var startY = endY - 3;
+    var startM = 1;
+    if (validStartIso && /^[0-9]{4}-[0-9]{2}/.test(validStartIso)) {
+      var vs = validStartIso.split('-');
+      startY = Number(vs[0]) || startY;
+      startM = Number(vs[1]) || 1;
+    }
+    if (startY > endY || (startY === endY && startM > endM)) {
+      startY = endY;
+      startM = endM;
+    }
+    var prevYear = yearSelect.value || String(endY);
+    yearSelect.innerHTML = '';
+    for (var y = endY; y >= startY; y--) {
+      var optY = document.createElement('option');
+      optY.value = String(y);
+      optY.textContent = fmtYear(y);
+      if (optY.value === prevYear) optY.selected = true;
+      yearSelect.appendChild(optY);
+    }
+    if (!yearSelect.value && yearSelect.options.length) yearSelect.options[0].selected = true;
+
+    var prevMonth = monthSelect.value || (String(endY) + '-' + String(endM).padStart(2, '0'));
+    monthSelect.innerHTML = '';
+    var cy = endY;
+    var cm = endM;
+    while (cy > startY || (cy === startY && cm >= startM)) {
+      var ym = String(cy) + '-' + String(cm).padStart(2, '0');
+      var optM = document.createElement('option');
+      optM.value = ym;
+      optM.textContent = fmtMonth(ym);
+      if (ym === prevMonth) optM.selected = true;
+      monthSelect.appendChild(optM);
+      cm -= 1;
+      if (cm < 1) {
+        cm = 12;
+        cy -= 1;
+      }
+    }
+    if (!monthSelect.value && monthSelect.options.length) monthSelect.options[0].selected = true;
+  }
+
+  function syncPickers() {
+    periodLabelEl.classList.toggle('hidden', mode !== '7d');
+    monthSelect.classList.toggle('hidden', mode !== 'month');
+    yearSelect.classList.toggle('hidden', mode !== 'year');
+    monthAllBtn.classList.toggle('hidden', mode !== 'month');
+    monthAllBtn.className = (mode !== 'month' ? 'hidden ' : '') +
+      'px-2.5 py-1 rounded-lg text-xs border transition-colors cursor-pointer ' +
+      (monthAll
+        ? 'border-emerald-500/70 bg-emerald-500/20 text-emerald-300'
+        : 'border-slate-600 text-slate-300 hover:border-emerald-500/60 hover:text-emerald-300');
+    tabs.forEach(function (btn) {
+      var active = btn.getAttribute('data-cn-mode') === mode;
+      btn.className = 'cn-charge-tab px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ' +
+        (active ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white');
+    });
+  }
+
+  function makeEl(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  }
+
+  function renderDetailsEmpty(text, isError) {
+    detailsListEl.innerHTML = '';
+    var cls = isError ? 'py-5 text-center text-xs text-red-400' : 'py-5 text-center text-xs text-slate-500';
+    detailsListEl.appendChild(makeEl('div', cls, text));
+  }
+
+  function renderDetailsItems(items) {
+    detailsListEl.innerHTML = '';
+    if (!items || !items.length) {
+      renderDetailsEmpty(I18N.detailEmpty, false);
+      return;
+    }
+    items.forEach(function (item, idx) {
+      var wrap = makeEl('div', 'rounded-xl border border-slate-700/70 bg-slate-900/50 overflow-hidden');
+      var headerBtn = makeEl('button', 'w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left hover:bg-slate-800/60 transition-colors cursor-pointer');
+      headerBtn.type = 'button';
+      var timeText = item.date_label + ' ' + item.start_time + ' – ' +
+        (item.cross_day && item.end_date_label ? item.end_date_label + ' ' : '') + item.end_time;
+      var titleSpan = makeEl('span', 'text-sm font-medium text-slate-100 tabular-nums', timeText);
+      var chevron = makeEl('span', 'text-xs text-slate-400 transition-transform', idx === 0 ? '▴' : '▾');
+      headerBtn.appendChild(titleSpan);
+      headerBtn.appendChild(chevron);
+
+      var body = makeEl('div', (idx === 0 ? '' : 'hidden ') + 'px-3.5 pb-3 pt-1 border-t border-slate-800/80 space-y-2 text-xs');
+      var rowEnergy = makeEl('div', 'flex items-center justify-between gap-2');
+      rowEnergy.appendChild(makeEl('span', 'text-slate-400', I18N.detailEnergy));
+      rowEnergy.appendChild(makeEl('span', 'font-medium text-slate-100 tabular-nums', Number(item.energy_kwh || 0).toFixed(1) + ' kWh'));
+
+      var rowDuration = makeEl('div', 'flex items-center justify-between gap-2');
+      rowDuration.appendChild(makeEl('span', 'text-slate-400', I18N.detailDuration));
+      rowDuration.appendChild(makeEl('span', 'font-medium text-slate-100 tabular-nums', String(item.duration_min || 0) + ' min'));
+
+      var rowType = makeEl('div', 'flex items-center justify-between gap-2');
+      rowType.appendChild(makeEl('span', 'text-slate-400', I18N.detailType));
+      var badgeText = I18N.typeUnknown;
+      var badgeCls = 'inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium bg-slate-700/70 text-slate-300';
+      if (item.charge_type === 'fast') {
+        badgeText = '⚡ ' + I18N.typeFast;
+        badgeCls = 'inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium bg-emerald-500 text-white';
+      } else if (item.charge_type === 'slow') {
+        badgeText = I18N.typeSlow;
+        badgeCls = 'inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium bg-sky-500/20 text-sky-300 border border-sky-500/40';
+      }
+      rowType.appendChild(makeEl('span', badgeCls, badgeText));
+
+      body.appendChild(rowEnergy);
+      body.appendChild(rowDuration);
+      body.appendChild(rowType);
+
+      headerBtn.addEventListener('click', function () {
+        var isHidden = body.classList.toggle('hidden');
+        chevron.textContent = isHidden ? '▾' : '▴';
+      });
+      wrap.appendChild(headerBtn);
+      wrap.appendChild(body);
+      detailsListEl.appendChild(wrap);
+    });
+    detailsListEl.appendChild(makeEl('div', 'pt-2 text-center text-xs text-slate-500', I18N.detailNoMore));
+  }
+
+  async function loadDetails(opts) {
+    var seq = ++detailsSeq;
+    var query = new URLSearchParams();
+    if (opts.date) {
+      query.set('date', opts.date);
+      detailsTargetEl.textContent = opts.date.replace(/-/g, '/');
+    } else if (opts.month) {
+      query.set('month', opts.month);
+      detailsTargetEl.textContent = fmtMonth(opts.month);
+    } else {
+      detailsTargetEl.textContent = '';
+      renderDetailsEmpty(I18N.detailEmpty, false);
+      return;
+    }
+    if (opts.refresh) query.set('refresh', '1');
+    renderDetailsEmpty(I18N.detailLoading, false);
+    try {
+      var res = await fetch('api/cn/charges/details?' + query.toString());
+      var data = await res.json();
+      if (seq !== detailsSeq) return;
+      if (!res.ok) throw new Error(data.error || I18N.unavailable);
+      renderDetailsItems(data.items || []);
+    } catch (err) {
+      if (seq !== detailsSeq) return;
+      renderDetailsEmpty(err && err.message ? err.message : I18N.unavailable, true);
+    }
+  }
+
+  function renderChart(series) {
+    if (chartEl._c) {
+      try { chartEl._c.destroy(); } catch (e) {}
+      chartEl._c = null;
+    }
+    if (typeof ApexCharts === 'undefined') return;
+    var selectedIdx = series.findIndex(function (item) { return item.date === selectedKey; });
+    var containerW = scrollEl.clientWidth || 320;
+    if (mode === 'month') {
+      chartWrapEl.style.minWidth = Math.max(containerW, series.length * 26) + 'px';
+    } else if (mode === 'year') {
+      chartWrapEl.style.minWidth = Math.max(containerW, 420) + 'px';
+    } else {
+      chartWrapEl.style.minWidth = '100%';
+    }
+    var labels = series.map(function (item) {
+      return mode === 'year' ? item.label + I18N.monthUnit : item.label;
+    });
+    var values = series.map(function (item) { return Number(item.energy_kwh || 0); });
+    var maxVal = values.reduce(function (acc, v) { return v > acc ? v : acc; }, 0);
+    var selVal = selectedIdx >= 0 ? values[selectedIdx] : 0;
+    var yAnnotations = [];
+    if (maxVal > 0) {
+      yAnnotations.push({
+        y: maxVal,
+        borderColor: '#64748b',
+        strokeDashArray: 4,
+        label: {
+          text: fmtKwh(maxVal),
+          position: 'left',
+          offsetX: 6,
+          style: { background: '#1e293b', color: '#cbd5e1', fontSize: '10px', padding: { left: 4, right: 4, top: 1, bottom: 1 } }
+        }
+      });
+    }
+    if (selectedIdx >= 0 && selVal > 0 && Math.abs(selVal - maxVal) > 0.05) {
+      yAnnotations.push({
+        y: selVal,
+        borderColor: '#22c55e',
+        strokeDashArray: 4,
+        label: {
+          text: fmtKwh(selVal),
+          position: 'left',
+          offsetX: 6,
+          style: { background: '#052e16', color: '#4ade80', fontSize: '10px', padding: { left: 4, right: 4, top: 1, bottom: 1 } }
+        }
+      });
+    }
+    var pointColors = series.map(function (item, idx) {
+      if (idx === selectedIdx || item.date === lastToday || item.date === lastToday.slice(0, 7)) {
+        return '#f8fafc';
+      }
+      return '#94a3b8';
+    });
+    var pointData = series.map(function (item, idx) {
+      return {
+        x: labels[idx],
+        y: values[idx],
+        fillColor: idx === selectedIdx ? '#22c55e' : 'rgba(34, 197, 94, 0.28)'
+      };
+    });
+
+    chartEl._c = new ApexCharts(chartEl, {
+      chart: {
+        type: 'bar',
+        height: 220,
+        toolbar: { show: false },
+        fontFamily: 'inherit',
+        background: 'transparent',
+        animations: { enabled: false },
+        events: {
+          dataPointSelection: function (_event, _chartCtx, config) {
+            var idx = config && typeof config.dataPointIndex === 'number' ? config.dataPointIndex : -1;
+            if (idx < 0 || idx >= currentSeries.length) return;
+            var picked = currentSeries[idx];
+            monthAll = false;
+            selectedKey = picked.date;
+            syncPickers();
+            renderChart(currentSeries);
+            if (mode === 'year') {
+              loadDetails({ month: picked.date });
+            } else {
+              loadDetails({ date: picked.date });
+            }
+          }
+        }
+      },
+      series: [{ name: 'kWh', data: pointData }],
+      legend: { show: false },
+      plotOptions: { bar: { borderRadius: 4, columnWidth: mode === 'month' ? '56%' : '42%' } },
+      dataLabels: { enabled: false },
+      grid: { borderColor: '#334155', strokeDashArray: 3, yaxis: { lines: { show: false } } },
+      annotations: { yaxis: yAnnotations },
+      xaxis: {
+        categories: labels,
+        labels: { style: { colors: pointColors, fontSize: '11px' }, rotate: 0 },
+        axisBorder: { color: '#334155' },
+        axisTicks: { show: false }
+      },
+      yaxis: {
+        min: 0,
+        max: maxVal > 0 ? Math.ceil(maxVal * 1.15 * 10) / 10 : 1,
+        tickAmount: 2,
+        labels: {
+          style: { colors: '#94a3b8', fontSize: '11px' },
+          formatter: function (v) { return fmtKwh(v); }
+        }
+      },
+      tooltip: {
+        theme: 'dark',
+        y: { formatter: function (v) { return Number(v).toFixed(1) + ' kWh'; } }
+      }
+    });
+    chartEl._c.render();
+
+    if (mode === 'month' && series.length) {
+      var focusIdx = selectedIdx >= 0 ? selectedIdx : series.findIndex(function (item) { return item.date === lastToday; });
+      if (focusIdx >= 0) {
+        var targetX = Math.max(0, (chartWrapEl.scrollWidth * (focusIdx + 0.5) / series.length) - (scrollEl.clientWidth / 2));
+        scrollEl.scrollLeft = targetX;
+      }
+    }
+  }
+
+  function pickInitialBar(series) {
+    for (var i = series.length - 1; i >= 0; i--) {
+      if (Number(series[i].energy_kwh || 0) > 0) return series[i].date;
+    }
+    return '';
+  }
+
+  async function loadStats(forceRefresh) {
+    statusEl.textContent = I18N.loading;
+    statusEl.className = 'text-xs text-slate-400';
+    var params = new URLSearchParams({ mode: mode });
+    if (mode === 'month' && monthSelect.value) params.set('month', monthSelect.value);
+    if (mode === 'year' && yearSelect.value) params.set('year', yearSelect.value);
+    if (forceRefresh) params.set('refresh', '1');
+    try {
+      var res = await fetch('api/cn/charges/statistics?' + params.toString());
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || I18N.unavailable);
+      if (data.today) lastToday = data.today;
+      if (data.valid_start) lastValidStart = data.valid_start;
+      rebuildPickers(lastToday, lastValidStart);
+      if (mode === 'month' && data.period && monthSelect.querySelector('option[value="' + data.period + '"]')) {
+        monthSelect.value = data.period;
+      }
+      if (mode === 'year' && data.period && yearSelect.querySelector('option[value="' + data.period + '"]')) {
+        yearSelect.value = data.period;
+      }
+      energyEl.textContent = Number(data.total_energy_kwh || 0).toFixed(1);
+      countEl.textContent = String(data.total_count || 0);
+      fastEl.textContent = Number(data.fast_charge_percent || 0).toFixed(0);
+      currentSeries = data.series || [];
+      var hasAny = currentSeries.some(function (item) { return Number(item.energy_kwh || 0) > 0; });
+      statusEl.textContent = hasAny ? '' : I18N.noData;
+
+      if (mode === 'month' && monthAll) {
+        selectedKey = '';
+        renderChart(currentSeries);
+        loadDetails({ month: monthSelect.value, refresh: forceRefresh });
+      } else {
+        var stillValid = currentSeries.some(function (item) { return item.date === selectedKey; });
+        if (!stillValid) selectedKey = pickInitialBar(currentSeries);
+        renderChart(currentSeries);
+        if (selectedKey) {
+          if (mode === 'year') {
+            loadDetails({ month: selectedKey, refresh: forceRefresh });
+          } else {
+            loadDetails({ date: selectedKey, refresh: forceRefresh });
+          }
+        } else {
+          detailsTargetEl.textContent = '';
+          renderDetailsEmpty(I18N.detailEmpty, false);
+        }
+      }
+    } catch (err) {
+      statusEl.textContent = err && err.message ? err.message : I18N.unavailable;
+      statusEl.className = 'text-xs text-red-400';
+    }
+  }
+
+  window._cnReloadChargeStats = loadStats;
+
+  tabs.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      mode = btn.getAttribute('data-cn-mode');
+      selectedKey = '';
+      monthAll = false;
+      syncPickers();
+      loadStats(false);
+    });
+  });
+  monthSelect.addEventListener('change', function () {
+    if (mode === 'month') {
+      selectedKey = '';
+      monthAll = false;
+      syncPickers();
+      loadStats(false);
+    }
+  });
+  yearSelect.addEventListener('change', function () {
+    if (mode === 'year') {
+      selectedKey = '';
+      syncPickers();
+      loadStats(false);
+    }
+  });
+  monthAllBtn.addEventListener('click', function () {
+    if (mode !== 'month') return;
+    monthAll = !monthAll;
+    if (monthAll) {
+      selectedKey = '';
+      syncPickers();
+      renderChart(currentSeries);
+      loadDetails({ month: monthSelect.value });
+    } else {
+      selectedKey = pickInitialBar(currentSeries);
+      syncPickers();
+      renderChart(currentSeries);
+      if (selectedKey) {
+        loadDetails({ date: selectedKey });
+      } else {
+        detailsTargetEl.textContent = '';
+        renderDetailsEmpty(I18N.detailEmpty, false);
+      }
+    }
+  });
+  refreshBtn.addEventListener('click', function () { loadStats(true); });
+  rebuildPickers(lastToday, lastValidStart);
+  syncPickers();
+  loadStats(false);
+})();
+</script>
+{% endif %}
 
 <!-- AC vs DC distribution, and Home vs Public (a second, independent split of the SAME charges,
      never a further breakdown of the ring beside it) — two matching cards, same row. Global

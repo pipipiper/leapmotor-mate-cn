@@ -10,9 +10,8 @@ in August: *«non ha senso mostrare 0, specialmente proprio in questo periodo ch
 di sicuro NON è la temperatura di qualcosa oggi»* — the number is not merely ambiguous, it is
 absurd, and Mate printed it with a straight face.
 
-And a zero does not stay on the page. It went to A Better Route Planner as a real cabin reading,
-and to the ready-automation gate, where "only pre-heat below 5 °C" was satisfied on **every poll,
-all year**. → [[signal-absent-is-not-signal-zero]]
+And a zero does not stay on the page: a dashboard cannot tell "the sensor is silent" from "the
+cabin is at zero", so silence must stay absence. → [[signal-absent-is-not-signal-zero]]
 """
 import pathlib
 
@@ -61,34 +60,6 @@ def test_the_activity_fingerprint_survives_an_absent_temperature():
     vd = client._parse_signal("VIN", _sig())
     fp = vd.fingerprint()
     assert fp is not None and None in fp
-
-
-# ── it does not leak into anything downstream ─────────────────────────────────
-
-def test_abrp_is_not_told_a_temperature_the_car_never_gave():
-    """ABRP already dropped None values; the parser's `or 0` was defeating it. So the fix at the
-    source repairs the route planner for free — asserted, not assumed."""
-    import abrp
-    vd = client._parse_signal("VIN", _sig(**{"1204": 55}))
-    tlm = abrp._telemetry(vd) if hasattr(abrp, "_telemetry") else None
-    if tlm is None:                       # builder is private/renamed → assert the field instead
-        assert vd.inside_temp is None
-        return
-    assert "cabin_temp" not in tlm and "batt_temp" not in tlm
-
-
-def test_the_ready_automation_does_not_fire_on_an_unknown_temperature():
-    """🔴 The worst of the consequences. 0.0 satisfied "only pre-heat below 5 °C" on every poll, so
-    on a car with no cabin sensor the automation fired every single time it was switched on, all
-    year round. Unknown is refused — and said out loud, because "could not be evaluated" is a
-    different fact from "false"."""
-    import ready_automation as ra
-    cfg = {"temp_enabled": True, "temp_comparator": "<", "temp_value": 5.0}
-    assert ra._condition_met(cfg, None) is False
-    assert ra._condition_met(cfg, 3.0) is True, "a real cold cabin still fires"
-    assert ra._condition_met(cfg, 20.0) is False
-    # …and with the condition switched off, an unknown temperature is irrelevant
-    assert ra._condition_met({"temp_enabled": False}, None) is True
 
 
 # ── what the pages show ───────────────────────────────────────────────────────

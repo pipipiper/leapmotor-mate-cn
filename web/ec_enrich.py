@@ -261,7 +261,7 @@ def convert_trip(trip_id: int) -> dict:
     Returns: {ok, reason?, ec?}."""
     from api_backend import is_china
     if is_china():
-        return {"ok": False, "error": "中國區雲端能耗僅到日，不能用作單趟能耗；保留本地估算"}
+        return {"ok": False, "error": "中国区云端能耗仅到日，不能用作单趟能耗；保留本地估算"}
     found = db_reader.trip_group(trip_id)
     if not found:
         return {"ok": False, "reason": "not_found"}

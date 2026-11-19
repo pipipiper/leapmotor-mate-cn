@@ -227,45 +227,17 @@ def test_before_we_have_published_anything_we_do_not_refuse():
     assert ran == [("VIN1", "lock", None)]
 
 
-# ── who gets out of the way ───────────────────────────────────────────────────
+# ── what a collision does ─────────────────────────────────────────────────────
 
-def test_the_betatester_moves_itself(tmp_path, monkeypatch):
-    monkeypatch.setattr(pmain, "_research_enabled", lambda: True)
+def test_a_collision_is_recorded_and_this_install_keeps_its_prefix(tmp_path):
+    """Another Mate publishing on the same topic prefix is recorded for Settings. The install never
+    renames itself: its entities are the ones automations point at."""
     d = D.Database(str(tmp_path / "t.db"))
     d.set_setting("mqtt_prefix", "leapmotor")
     pmain._handle_mqtt_collision(d, "theirs", False, "VIN1")
-    assert d.get_setting("mqtt_prefix") == "leapmotor_beta"
-
-
-def test_the_official_build_never_moves(tmp_path, monkeypatch):
-    """Its entities are the ones with automations pointing at them. Renaming those by itself would
-    break a working setup to fix a problem the user has not seen yet."""
-    monkeypatch.setattr(pmain, "_research_enabled", lambda: False)
-    d = D.Database(str(tmp_path / "t.db"))
-    d.set_setting("mqtt_prefix", "leapmotor")
-    pmain._handle_mqtt_collision(d, "theirs", True, "VIN1")
     assert d.get_setting("mqtt_prefix") == "leapmotor"
-    assert json.loads(d.get_setting("mqtt_collision"))["moved_to"] == ""
-
-
-def test_it_moves_once_and_then_stops(tmp_path, monkeypatch):
-    """Already carrying the suffix and still colliding means a second BetaTester on the same broker.
-    Appending for ever would be a slow-motion loop."""
-    monkeypatch.setattr(pmain, "_research_enabled", lambda: True)
-    d = D.Database(str(tmp_path / "t.db"))
-    d.set_setting("mqtt_prefix", "leapmotor")
-    pmain._handle_mqtt_collision(d, "theirs", False, "VIN1")
-    pmain._handle_mqtt_collision(d, "theirs", False, "VIN1")
-    assert d.get_setting("mqtt_prefix") == "leapmotor_beta"
-
-
-def test_what_happened_is_written_down_for_the_page(tmp_path, monkeypatch):
-    monkeypatch.setattr(pmain, "_research_enabled", lambda: True)
-    d = D.Database(str(tmp_path / "t.db"))
-    d.set_setting("mqtt_prefix", "leapmotor")
-    pmain._handle_mqtt_collision(d, "theirs", False, "VIN1")
     rec = json.loads(d.get_setting("mqtt_collision"))
-    assert rec["prefix"] == "leapmotor" and rec["moved_to"] == "leapmotor_beta"
+    assert rec["prefix"] == "leapmotor" and rec["moved_to"] == ""
     assert rec["vin"] == "VIN1" and rec["at"]
 
 

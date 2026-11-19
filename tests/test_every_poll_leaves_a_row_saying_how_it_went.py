@@ -193,44 +193,6 @@ def test_a_login_the_web_makes_lands_in_the_same_table(tmp_path, monkeypatch):
     assert rows == [("ok", "web", None)]
 
 
-def test_a_login_the_history_sync_makes_is_the_pollers(tmp_path, monkeypatch):
-    """The cloud-history worker builds a client of its own, in the poller's process: a login it
-    spends is the poller's row, and a session it resumes is no login at all. Through the real
-    bridge, with only the cloud replaced."""
-    import sqlite3
-    import types
-
-    import api_v2_bridge as bridge  # the module the worker imports, not a second copy
-    import crypto
-    import history_worker as worker
-    path = str(tmp_path / "history.db")
-    db = D.Database(path)
-    db.ensure_vehicle(VIN, "B10")
-    db.set_setting("leapmotor_user", crypto.encrypt("u"))
-    db.set_setting("leapmotor_pass", crypto.encrypt("p"))
-    db.set_setting("mate_device_id", "dev")
-    for mod in (bridge, worker):
-        monkeypatch.setattr(mod, "DB", path)
-        monkeypatch.setattr(mod, "connect_db", lambda: sqlite3.connect(path))
-    monkeypatch.setattr(bridge, "certificate_usable", lambda cert, key: True)
-    monkeypatch.setenv("MATE_LAB_LOGIN_ONCE", "1")
-    # a token shaped like the cloud's (header.payload.signature) with no device binding inside
-    session = types.SimpleNamespace(token="h.e30.s", user_id="U", device_id="D", key=b"k" * 32, client_cert=("c", "k"),
-                                    expires_at=datetime.now(timezone.utc) + timedelta(hours=1))
-    monkeypatch.setattr(bridge.NewAPIClient, "_authenticate_session", lambda self: session)
-    # the wire answers an account with no cars: the sync stops right after the login it needed
-    monkeypatch.setattr(bridge.NewAPIClient, "_wire",
-                        lambda self, *a, **k: ({"data": {"bindcars": [], "sharedcars": []}}, None))
-
-    def _rows():
-        return [tuple(r) for r in db._conn.execute(
-            "SELECT outcome, process FROM poll_log WHERE kind='login' ORDER BY id").fetchall()]
-    worker.sync_once(on_login=lambda exc: PM._note_login(path, exc))
-    assert _rows() == [("ok", "poller")]
-    worker.sync_once(on_login=lambda exc: PM._note_login(path, exc))
-    assert _rows() == [("ok", "poller")], "the second sync resumed the session it had saved"
-
-
 def test_a_login_row_from_another_thread_does_not_share_the_poll_loops_connection(tmp_path):
     """The cloud-history worker logs in from its own thread while the poll loop may be
     mid-transaction on the poller's connection. One connection under two threads interleaved

@@ -21,7 +21,6 @@ What is fixed here, and what is NEW:
 import sqlite3
 import types
 
-import charge_import
 import db as D
 import db_reader
 import pytest
@@ -229,72 +228,6 @@ def test_the_kwh_half_follows_the_same_window(car):
     assert card["kwh_100km"] == 7.5
 
 
-# ── C · the odometer through the CSV ──────────────────────────────────────────
-
-def _parse(text):
-    from datetime import timezone
-    return charge_import.parse_charge_csv(text, tz=timezone.utc, today=__import__("datetime").date(2027, 1, 1))
-
-
-def test_the_csv_carries_the_odometer_as_its_last_column():
-    """The importer's own rule, written in its header map: new optional columns go at the END, so
-    every file anybody already has keeps working."""
-    rows, errors = _parse("date,energy_kwh,cost,type,start_soc,end_soc,end,odometer_km\n"
-                          "2026-05-01 08:00,30,8.10,AC,,,,18450\n")
-    assert errors == [] and rows[0]["odometer_km"] == 18450.0
-
-
-def test_a_file_without_the_column_still_imports():
-    rows, errors = _parse("date,energy_kwh\n2026-05-01 08:00,30\n")
-    assert errors == [] and rows[0]["odometer_km"] is None
-
-
-def test_the_column_is_found_by_name_however_it_is_spelled():
-    rows, _ = _parse("date,energy_kwh,odometer\n2026-05-01 08:00,30,18450\n")
-    assert rows[0]["odometer_km"] == 18450.0
-
-
-def test_an_odometer_of_zero_is_rejected_not_stored():
-    rows, errors = _parse("date,energy_kwh,odometer_km\n2026-05-01 08:00,30,0\n")
-    assert rows == [] and "odometer_km" in errors[0]
-
-
-def test_an_absurd_odometer_is_a_typo():
-    rows, errors = _parse("date,energy_kwh,odometer_km\n2026-05-01 08:00,30,999999999\n")
-    assert rows == [] and "odometer_km" in errors[0]
-
-
-def test_the_template_hands_out_the_column_and_says_it_is_km():
-    assert "odometer_km" in charge_import.TEMPLATE
-    assert charge_import.TEMPLATE.rstrip().endswith("odometer_km")
-    assert "never miles" in charge_import.TEMPLATE
-
-
-# ── D · the import fills in instead of duplicating ────────────────────────────
-
-def test_re_importing_the_same_file_does_not_double_the_archive(car):
-    """🔴 It used to. Every clean line went straight to `add_manual_charge`, so 152 charges became
-    304 and the money with them — and on a figure that was already wrong nobody would have seen it."""
-    row = {"started_at": "2026-07-03T10:00:00+00:00", "ended_at": None, "energy_kwh": 30.0,
-           "cost": 12.0, "charge_type": "AC", "start_soc": None, "end_soc": None,
-           "odometer_km": None}
-    assert db_reader.import_charge_row(row) == "added"
-    assert db_reader.import_charge_row(row) == "unchanged"
-    assert car._conn.execute("SELECT COUNT(*) c FROM charges").fetchone()["c"] == 1
-
-
-def test_a_second_pass_carrying_the_odometer_fills_the_charge_in(car):
-    """Which is the whole point: someone with a year of typed-in history adds the kilometres to it
-    without deleting a single row first."""
-    row = {"started_at": "2026-07-03T10:00:00+00:00", "ended_at": None, "energy_kwh": 30.0,
-           "cost": 12.0, "charge_type": "AC", "start_soc": None, "end_soc": None,
-           "odometer_km": None}
-    db_reader.import_charge_row(row)
-    assert db_reader.import_charge_row({**row, "odometer_km": 18450.0}) == "filled"
-    got = car._conn.execute("SELECT COUNT(*) c, MAX(odometer_km) o FROM charges").fetchone()
-    assert got["c"] == 1 and got["o"] == 18450.0
-
-
 def test_a_charge_typed_into_the_form_keeps_its_odometer(car):
     """The other half of the same door: not the CSV, the "add a past charge" form. A mutation that
     dropped the column from that INSERT went unnoticed — every test here reached the odometer
@@ -303,32 +236,6 @@ def test_a_charge_typed_into_the_form_keeps_its_odometer(car):
                                       odometer_km=18450.0)
     assert car._conn.execute(
         "SELECT odometer_km FROM charges WHERE id=?", (cid,)).fetchone()["odometer_km"] == 18450.0
-
-
-def test_a_matched_row_rewrites_the_odometer_and_nothing_else(car):
-    """⚠️ Declared and deliberately narrow. Mate may have computed the cost from a real charging
-    curve; a re-import that quietly overwrote it would be a fresh way to lose data."""
-    car.create_charge(1, _frame(soc=20.0, odo=None))
-    car._conn.execute("UPDATE charges SET started_at='2026-07-03T10:00:00+00:00',"
-                      " ended_at='2026-07-03T11:00:00+00:00', energy_added_kwh=30.0, cost=9.99,"
-                      " charge_type='DC', odometer_km=NULL")
-    car._conn.commit()
-    db_reader.import_charge_row({"started_at": "2026-07-03T10:00:00+00:00", "ended_at": None,
-                                 "energy_kwh": 30.0, "cost": 1.0, "charge_type": "AC",
-                                 "start_soc": None, "end_soc": None, "odometer_km": 18450.0})
-    row = car._conn.execute("SELECT cost, charge_type, odometer_km FROM charges").fetchone()
-    assert row["odometer_km"] == 18450.0
-    assert row["cost"] == 9.99 and row["charge_type"] == "DC", "the measured charge is untouched"
-
-
-def test_a_different_session_at_the_same_minute_is_still_a_new_one(car):
-    """The energy has to agree too: either test alone is a coincidence waiting to happen."""
-    row = {"started_at": "2026-07-03T10:00:00+00:00", "ended_at": None, "energy_kwh": 30.0,
-           "cost": 12.0, "charge_type": "AC", "start_soc": None, "end_soc": None,
-           "odometer_km": None}
-    db_reader.import_charge_row(row)
-    assert db_reader.import_charge_row({**row, "energy_kwh": 8.0}) == "added"
-    assert car._conn.execute("SELECT COUNT(*) c FROM charges").fetchone()["c"] == 2
 
 
 # ── F · how far the car went between two charges ──────────────────────────────
@@ -394,8 +301,8 @@ def test_every_language_carries_the_new_strings():
     import json
     import pathlib
     root = pathlib.Path(__file__).resolve().parent.parent / "web" / "locales"
-    keys = ("stats_cost100_note_odo", "manual_charge_odometer", "import_filled",
-            "import_all_known", "charge_km_since_prev_hint")
+    keys = ("stats_cost100_note_odo", "manual_charge_odometer",
+            "charge_km_since_prev_hint")
     for f in sorted(root.glob("*.json")):
         d = json.loads(f.read_text(encoding="utf-8"))["translations"]
         assert not [k for k in keys if k not in d], f"{f.name} is missing strings"
@@ -432,9 +339,8 @@ def test_the_charges_page_hides_the_field_it_cannot_store(car):
     than no field at all."""
     import pathlib
     page = (pathlib.Path(__file__).resolve().parent.parent
-            / "web" / "templates" / "charges.html").read_text()
-    assert "{% if charges_have_odometer %}" in page
+            / "web" / "templates" / "partials" / "charge_card.html").read_text()
+    assert "{% if c.odometer_km is defined %}" in page
     assert 'name="odometer"' in page
     main = (pathlib.Path(__file__).resolve().parent.parent / "web" / "main.py").read_text()
-    assert "charges_have_odometer=db_reader.charges_have_odometer()" in main
     assert "units.dist_to_km(odo)" in main, "typed in the reader's unit, stored in km"

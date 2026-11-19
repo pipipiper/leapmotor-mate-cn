@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block autorefresh %}0{% endblock %}{# charge/climate schedule editor forms #}
+{% block autorefresh %}0{% endblock %}{# charge schedule editor form #}
 {% block title %}{{ t('nav_scheduling') }} — LeapMotor Mate{% endblock %}
 
 {% block content %}
@@ -9,9 +9,7 @@
 </div>
 
 <div class="space-y-6">
-  <!-- Charge schedule (cmd 190) + climate pre-conditioning schedule (cmd 171). Both write on the
-       B10; climate was unblocked 2026-06-07 (ClimaSchedulerT01 — the -2 was an expired start_time). -->
+  <!-- Charge schedule (cmd 190). -->
   {% include "partials/charge_schedule.html" %}
-  {% if china_market() %}<p class="rounded-xl bg-slate-900 p-5 text-slate-400">{{ t('cn_schedule_unsupported') }}</p>{% else %}{% include "partials/climate_schedule.html" %}{% endif %}
 </div>
 {% endblock %}

@@ -1,29 +1,31 @@
-# LeapMotor Mate 中國區
+# LeapMotor Mate 中国区
 
-中國市場零跑帳號與車輛的本地行程記錄、充電統計及遠端控制版本。基於 [LeapMotor Mate](https://github.com/ProtossBlaster/leapmotor-mate)，參照 [ha-leapmotor-cn](https://github.com/MiRaToo/ha-leapmotor-cn) 及其他相關專案。
+中国市场零跑账号与车辆的本地行程记录、充电统计及远程控制版本。基于 [LeapMotor Mate](https://github.com/ProtossBlaster/leapmotor-mate)，参照 [ha-leapmotor-cn](https://github.com/MiRaToo/ha-leapmotor-cn) 及其他相关项目。
 
-## 快速啟動
+## 快速启动
 
-需要 Docker 與 Docker Compose：
+需要 Docker 与 Docker Compose：
 
 ```sh
 cd ~/Develop/leapmotor-mate-cn
 docker compose up -d --build
 ```
 
-開啟 http://localhost:4000 ，以中國大陸手機短信驗證碼登入。先在官方 App 接受共享，再為每台車填寫電池可用容量及選填的操作 PIN。預設簡體中文、人民幣及中國標準時間，不需要國際版憑證或帳號密碼。
+打开 http://localhost:4000，以中国大陆手机短信验证码登录。先在官方 App 接受共享，再为每台车填写电池可用容量及选填的操作 PIN。默认简体中文、人民币及中国标准时间，不需要国际版证书或账号密码。
 
-登入與續期、被動車況、每 VIN 路由、共享權限、本地記錄、MQTT 與既有中國區控制已接入。雲端受理不會直接顯示成車輛執行成功。
+登录与续期、被动车况、每 VIN 路由、共享权限、本地记录、MQTT 与既有中国区控制已接入；官方云端充电记录也可以同步到本地。云端受理不会直接显示成车辆执行成功。
 
-原生空調排程、prepare-car、導航下發、充電槍解鎖、直接充電啟停與官方逐筆歷史匯入尚未支援。
+原生空调排程、Prepare Car、导航下发、充电枪解锁、直接充电启停尚未支持。
 
-完整的[設定、支援表與驗證方式](docs/CHINA-MARKET.md)。持久資料在 `./data`，備份時請連同 `secret.key` 保存。
+本分支已移除只适用于国际版的功能：ABRP 遥测、导航下发、Prepare Car、原生空调排程、EU 云端行程导入、外部充电站检索（Overpass / Open Charge Map / TomTom）以及 BetaTester 研究导出。Settings 中不再显示这些入口。
 
-此分支須用原始碼建置，上游公共鏡像與桌面發行包沒有中國區轉接器。
+完整的[设置、支持表与验证方式](docs/CHINA-MARKET.md)。持久数据在 `./data`，备份时请连同 `secret.key` 保存。
 
-## 上游國際版參考
+此分支须用源码构建，上游公共镜像与桌面发行包没有中国区适配器。
 
-下方保留原專案說明、致謝與歷史功能介紹；其發行包、帳號設定及車型驗收範圍屬於國際版。
+## 上游国际版参考
+
+下方保留原项目说明、致谢与历史功能介绍；其发行包、账号设定及车型验收范围属于国际版，不代表本分支仍然提供这些功能。
 
 ---
 

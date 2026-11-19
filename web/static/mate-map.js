@@ -10,7 +10,7 @@
     osm: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
   })
   const styles = ['auto', 'vector', 'satellite', 'dark']
-  const names = {auto: '自動', vector: '路網', satellite: '衛星', dark: '深色'}
+  const names = {auto: '自动', vector: '路网', satellite: '卫星', dark: '深色'}
   const maps = new Set()
   let selected = 'auto'
   try {
@@ -80,7 +80,7 @@
       const url = state.fallback ? sources.osm : sources[style === 'satellite' ? 'satellite' : 'vector']
       const layer = L.tileLayer(url, {
         subdomains: '1234', maxZoom: 18, referrerPolicy: 'origin',
-        attribution: state.fallback ? '© OpenStreetMap contributors' : '© 高德地圖',
+        attribution: state.fallback ? '© OpenStreetMap contributors' : '© 高德地图',
         className: style === 'dark' ? 'mate-map-dark' : ''
       })
       state.layer = layer
@@ -94,7 +94,7 @@
       if (center) map.setView(center, zoom, {reset: true, animate: false})
       if (state.select) state.select.value = state.style
       if (state.notice) {
-        state.notice.textContent = state.fallback ? '高德暫不可用，已切換 OpenStreetMap' : ''
+        state.notice.textContent = state.fallback ? '高德暂不可用，已切换 OpenStreetMap' : ''
         state.notice.hidden = !state.fallback
       }
     }
@@ -104,7 +104,7 @@
       onAdd() {
         const box = L.DomUtil.create('div', 'mate-map-style')
         const select = document.createElement('select')
-        select.setAttribute('aria-label', '地圖底圖')
+        select.setAttribute('aria-label', '地图底图')
         for (const style of styles) {
           const option = document.createElement('option')
           option.value = style

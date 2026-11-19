@@ -28,7 +28,6 @@ def _run_rounds(tmp_path, monkeypatch, rounds):
                                                     sleep=lambda s: clock.__setitem__("t", clock["t"] + s)))
     monkeypatch.setattr(PM, "_maybe_refresh_charge_schedule", lambda *a, **k: None)
     monkeypatch.setattr(PM.energy_snapshots, "maybe_sample", lambda *a, **k: None)
-    monkeypatch.setattr(PM.ready_automation, "maybe_trigger", lambda *a, **k: None)
     monkeypatch.setattr(PM, "_mqtt_tick", lambda db, c, d, s: None)
     monkeypatch.setattr(PM, "load_config", lambda db: {
         "username": "u", "password": "p", "pin": "1234",

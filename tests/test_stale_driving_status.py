@@ -14,7 +14,7 @@ def screen(rig, monkeypatch):
     db.set_setting("language", "en")
     monkeypatch.setattr(db_reader, "DB_PATH", db._path)
     monkeypatch.setattr(db_reader, "_current_vehicle_id", lambda: rec._vehicle_id)
-    for module in (main.charger_locator, main.ec_enrich, main.elevation_enrich):
+    for module in (main.ec_enrich, main.elevation_enrich):
         monkeypatch.setattr(module, "maybe_sweep", lambda: None)
     return db, rec, poll, wall
 

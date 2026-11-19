@@ -22,7 +22,6 @@ from fastapi.templating import Jinja2Templates
 from fastapi.concurrency import run_in_threadpool
 
 sys.path.insert(0, str(Path(__file__).parent))
-import battery_packs
 import db_reader
 import capability_profile
 import command_client
@@ -30,7 +29,6 @@ import car_image
 import i18n
 import ha_client
 import geocode
-import charger_locator
 import mqtt_check
 import auth
 import security
@@ -41,7 +39,6 @@ MATE_VERSION = "5.0.0"  # bump together with the git tag + add-on config.yaml at
 import diagnostics
 import demo
 import maintenance
-import research
 import ec_enrich
 import elevation_enrich
 import place_lookup
@@ -497,10 +494,15 @@ async def setup_check(request: Request, call_next):
         if path.startswith("/api/"):
             return Response("authentication required", status_code=401)
         return RedirectResponse(request.headers.get("x-ingress-path", "") + "/login")
+    # Features that belong to other markets/builds are not part of the China edition.
+    if path == "/navigation" or path == "/prepare-car" or path.startswith("/research") \
+            or path.startswith("/api/nav/") or path.startswith("/api/prepare-car/") \
+            or path.startswith("/api/research/") or path == "/api/climate-schedule" \
+            or path.startswith("/api/settings/abrp") \
+            or path.startswith("/api/settings/cloud-import") \
+            or path.startswith("/api/settings/charger-locator"):
+        return Response(status_code=404)
     # Setup wizard gate (unchanged).
-    from api_backend import is_china
-    if is_china() and (path == '/api/nav/send' or path == '/api/climate-schedule' or path.startswith('/api/prepare-car/')):
-        return JSONResponse({'ok': False, 'unsupported': True, 'error': '此原生功能尚未支援中國區，未發送請求'}, status_code=409)
     if path.startswith("/setup") or path.startswith("/api/"):
         return await call_next(request)
     if os.environ.get("LEAPMOTOR_USER"):  # env-var dev mode skips the wizard
@@ -508,10 +510,6 @@ async def setup_check(request: Request, call_next):
     if not db_reader.is_setup_complete():
         # Honor the HA ingress path so the redirect stays inside the add-on panel
         return RedirectResponse(request.headers.get("x-ingress-path", "") + "/setup")
-    # BetaTester consent gate (research build only): one-time acknowledgement before any page.
-    if research.research_enabled() and db_reader.get_setting("research_consent", "0") != "1" \
-            and not path.startswith("/research/consent"):
-        return RedirectResponse(request.headers.get("x-ingress-path", "") + "/research/consent")
     return await call_next(request)
 
 
@@ -650,9 +648,6 @@ def _ctx(**kwargs):
     # Same piggyback for the rows one plug-in was cut into by a wallbox pause (#374): a cursor read
     # and one indexed SELECT per render, and each charge is examined exactly once.
     db_reader.join_charges_split_by_a_pause()
-    # Same piggyback for the 📍 station labels — settings probe + tiny SELECT per render,
-    # the OSM lookups run in a background thread on a TTL (see charger_locator.maybe_sweep).
-    charger_locator.maybe_sweep()
     # Same piggyback for per-trip EC (driving) energy enrichment (Phase 2) — no-op unless the
     # feature is enabled; the cloud calls run in a background thread on a TTL.
     ec_enrich.maybe_sweep()
@@ -688,12 +683,10 @@ def _ctx(**kwargs):
             if _match:
                 wb_active_profile_name = _match["name"]
                 wb_active_profile_id   = _pid
-    # Per-model nav gating: hide links to pages the car physically can't use (e.g. T03 has no
-    # prepare-car — no PREPARE right). Reuse a vehicle already in the context, else a cheap lookup.
+    # Reuse a vehicle already in the context, else a cheap lookup.
     _veh = kwargs.get("vehicle")
     if _veh is None:
         _veh, _ = db_reader.get_vehicle()
-    _car_type = (_veh or {}).get("car_type", "")
     # Ability-gated command buttons: hide those the car doesn't declare it can do (e.g. the T03
     # never declares code 53 = unlock charge cable — #142). None abilities → shown (never on a guess).
     _abilities = capability_profile.parse_abilities((_veh or {}).get("abilities"))
@@ -732,7 +725,6 @@ def _ctx(**kwargs):
             # has. So the "remove everything" button is offered on the Mac only.
             "shell_platform": os.environ.get("MATE_DESKTOP_PLATFORM", ""),
             "update": update_check.get_update_status(MATE_VERSION),
-            "prepare_car_shown": not __import__("api_backend").is_china() and not capability_profile.model_hidden(_car_type, "prepare_car"),
             "unlock_charger_shown": capability_profile.command_shown(
                 (_veh or {}).get("vin", ""), "unlock_charger", abilities=_abilities),
             "healthy_charging_shown": capability_profile.command_shown(
@@ -749,7 +741,6 @@ def _ctx(**kwargs):
             "sched_window": _charge_window(),
             "wallbox_enabled": wallbox_enabled,
             "is_reev": db_reader.is_reev_car(),
-            "research": research.research_enabled(),
             "ec_periods": db_reader.get_setting("ec_periods_enabled", "1") == "1",
             "wb_active_profile_name": wb_active_profile_name,
             "wb_active_profile_id":   wb_active_profile_id,
@@ -759,13 +750,10 @@ def _ctx(**kwargs):
             "auth_unprotected": auth.unprotected(), "auth_env": auth.env_password_wins(),
             "auth_dismissed": db_reader.get_setting("auth_warning_dismissed", "0") == "1",
             "desktop_notice_dismissed": db_reader.get_setting("desktop_notice_dismissed", "0") == "1",
-            # The BetaTester banner is dismissible too (@ebagnoli, beta #13). The BETA badge beside
-            # the version stays regardless — the warning is what you take in once, the build is what
-            # you must be able to tell at a glance.
-            "beta_notice_dismissed": db_reader.get_setting("beta_notice_dismissed", "0") == "1",
             "is_addon": auth.is_addon(),
             "soc_color": _soc_color, "state_label": state_label, "state_color": _state_color, "ago": ago,
-            "is_driving": _driving, "fmt_dur": _fmt_dur}
+            "is_driving": _driving, "fmt_dur": _fmt_dur,
+            "timezone_region_label": db_reader.timezone_region_label}
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
@@ -965,7 +953,7 @@ def _trips_calendar_ctx(year: int, month: int, open_day: int = 0, open_to: int =
         "prev_year": prev_year, "prev_month": prev_month,
         "next_year": next_year, "next_month": next_month,
         "today": today, "fmt_dur": _fmt_dur,
-        "is_reev": db_reader.is_reev_car(), "research": research.research_enabled(),
+        "is_reev": db_reader.is_reev_car(),
         # What this month's totals deliberately leave out. Computed here, inside the calendar's own
         # context, so it is swapped together with the grid when the month buttons are used.
         "offline": db_reader.offline_gaps_summary(year, month),
@@ -1022,7 +1010,7 @@ async def trips_calendar_day(request: Request, year: int, month: int, day: Annot
         ctx["address_credit"] = db_reader.trip_places([step["trip"] for chain in candidates for step in chain])
     return templates.TemplateResponse(request, "partials/trips_calendar_day.html", {
         "t": i18n.get_t(lang), "fmt_dur": _fmt_dur,
-        "is_reev": db_reader.is_reev_car(), "research": research.research_enabled(),
+        "is_reev": db_reader.is_reev_car(),
         **ctx,
         # The 🔗 and slider URLs the drawer builds take these, with the day from _trips_drawer_ctx.
         "year": year, "month": month,
@@ -1092,7 +1080,7 @@ def _trips_search_ctx(filters: dict[str, str], year: int, month: int) -> dict | 
     y, m = year or today.year, month or today.month
     return {
         "t": i18n.get_t(lang), "fmt_dur": _fmt_dur,
-        "is_reev": db_reader.is_reev_car(), "research": research.research_enabled(),
+        "is_reev": db_reader.is_reev_car(),
         "trips": trips, "year": year or today.year, "month": month or today.month,
         "address_credit": db_reader.places_credit(trips),      # search_trips named every trip's places
         # disc #263 — the period's own total (km, fuel, cost) for whatever the filters selected, so a
@@ -1588,6 +1576,7 @@ async def charges_page(request: Request, highlight: int = 0, station: str = "", 
         cal_year=cal_year, cal_month=cal_month, cal_open_day=cal_open_day,
         cal_years=db_reader.get_charge_years(station or None),
         charges_have_odometer=db_reader.charges_have_odometer(),
+        cn_today=db_reader.today_local(),
         # Drawn here, not fetched: see _charges_calendar_ctx. The htmx load-trigger still runs on
         # top of this — it is what re-opens the remembered day and what the ?highlight= scroll
         # hangs off — but the history no longer DEPENDS on it coming back.
@@ -1735,8 +1724,8 @@ def _render_fuel_calendar(request: Request, year: int, month: int, open_day: int
 @app.get("/api/fuel/calendar", response_class=HTMLResponse)
 async def fuel_calendar(request: Request, year: int = 0, month: int = 0, open_day: int = 0):
     """Rifornimenti Month view (HTMX partial, day totals only). Behind the SAME gate as the page it
-    belongs to: a route that serves the page's data without the page's guard hands a BEV or a
-    non-research build the very fuel history the guard exists to withhold."""
+    belongs to: a route that serves the page's data without the page's guard hands a BEV the very
+    fuel history the guard exists to withhold."""
     if _fuel_blocked():
         return HTMLResponse("", status_code=403)
     return _render_fuel_calendar(request, year, month, open_day)
@@ -1859,8 +1848,8 @@ async def statistics(request: Request):
     # the charge that went with it — so this is the only place they are ever stated.
     totals["offline_gaps"] = db_reader.offline_gaps_summary()
     # Consumption vs outside temperature, one point per trip (the temperatures are already on the
-    # trips from the elevation enrichment). The petrol half follows the same REEV+research gate as
-    # every other fuel figure — computed for nobody else, not merely hidden.
+    # trips from the elevation enrichment). The petrol half follows the same REEV gate as every
+    # other fuel figure — computed for nobody else, not merely hidden.
     efftemp = db_reader.get_efficiency_vs_temp(
         include_fuel=_reev)
     return templates.TemplateResponse(request, "statistics.html", _ctx(
@@ -1910,46 +1899,14 @@ async def battery_vampire_section(request: Request):
     ))
 
 
-# Sample REEV signals (from gm27271's real C10 REEV) for the research-only /reev?demo preview.
-# 3261=3259+3260 and 3258=3256+3257 hold (the confirmed range arithmetic).
-_REEV_DEMO_SIGNALS = {
-    "3235": "96.2",   # fuel level %
-    "3259": "796",    # fuel range (display)      3256 max
-    "3256": "830",    # fuel range (rated/max)
-    "3260": "54",     # EV range (display)        3257 max
-    "3257": "147",    # EV range (rated/max, ~WLTP)
-    "3261": "850",    # combined range (display)  = 796 + 54
-    "3258": "977",    # combined range (rated/max) = 830 + 147
-    "3262": "1",      # range mode
-}
-
-
 @app.get("/reev", response_class=HTMLResponse)
 async def reev_page(request: Request):
-    """Dedicated, isolated REEV (range-extender) view. BETA / data-collection: it surfaces the
-    raw fuel signals we currently know (mapped from a real B10 REEV in kerniger/leapmotor-ha#46)
-    WITHOUT plumbing them into trips/charges/stats yet — those get touched only once the
-    behaviour is validated against real REEV data. Live signal fetch (no pipeline storage)."""
+    """Dedicated REEV (range-extender) view for the official China-market data source."""
     import asyncio
-    is_research = research.research_enabled()
-    # REEV is capability-gated (is_reev): a BEV owner must NEVER reach any REEV surface, on any build.
-    # The BetaTester build is no longer part of THIS gate — the fuel figures were calibrated against
-    # the owner's own app on 29/09/2026 — but it still gates the research TOOLS inside the page and
-    # the ?demo layout preview, which invents signals for a car that has none.
-    is_reev_car = db_reader.is_reev_car()
-    demo = bool(is_research and request.query_params.get("demo"))
-    if not is_reev_car and not demo:
+    if not db_reader.is_reev_car():
         return RedirectResponse(request.headers.get("x-ingress-path", "") + "/")
     vehicle, _ = db_reader.get_vehicle()
-    # Research-only preview: /reev?demo=1 renders the dashboard with sample REEV values (from a real
-    # C10 REEV) so the layout can be reviewed without a range-extender car. Inert in the official build.
-    if is_research and request.query_params.get("demo"):
-        sig = _REEV_DEMO_SIGNALS
-    else:
-        live = await asyncio.get_event_loop().run_in_executor(None, command_client.get_fresh_signals)
-        # Fall back to the last stored raw signals (research capture) when a live fetch isn't available
-        # — e.g. a replayed tester bundle, or a transient cloud hiccup — so the dashboard stays populated.
-        sig = live or (db_reader.latest_raw_signals() if is_research else {})
+    sig = await asyncio.get_event_loop().run_in_executor(None, command_client.get_fresh_signals) or {}
     signals = sig
 
     def f(key):
@@ -1974,22 +1931,16 @@ async def reev_page(request: Request):
     # Battery side of the dual-energy picture (SoC + capacity) — from the pipeline, not a live signal.
     status = db_reader.get_latest_status() or {}
     reev["soc_pct"] = status.get("soc")
-    # Phase B — the cloud's own consumption (electric kWh/100km + fuel L/100km). Best-effort; only for a
-    # real REEV or the demo, so a BEV owner in research mode doesn't pay an extra cloud call for nothing.
+    # Phase B — the cloud's own consumption (electric kWh/100km + fuel L/100km). Best-effort.
     consumption = None
-    if reev["has_fuel"] and request.query_params.get("demo") and is_research:
-        consumption = {"elec_kwh_100km": 17.8, "fuel_l_100km": 6.2, "fuel_mpg": 37.9}
-    elif reev["has_fuel"]:
+    if reev["has_fuel"]:
         consumption = await asyncio.get_event_loop().run_in_executor(
             None, command_client.get_plugin_consumption)
     # Absolute ELECTRIC energy (last 7 days), driver/A·C/other split — the metered getEC kWh, the
     # counterpart to the fuel litres shown above. Reuses the 6h Statistics cache, so it only hits the
     # cloud on a cold/stale cache (never an extra call per REEV page view).
     energy_abs = None
-    if demo:
-        energy_abs = {"driving_kwh": 12.4, "ac_kwh": 1.9, "other_kwh": 0.8, "total_kwh": 15.1,
-                      "driving_pct": 82.1, "ac_pct": 12.6, "other_pct": 5.3}
-    elif reev["has_fuel"]:
+    if reev["has_fuel"]:
         import time as _t
         _slot = _car_slot(_energy_cache)     # per-auto: la pagina REEV condivide la cache delle Statistiche
         if not _slot["data"] or _t.time() - _slot["ts"] >= 6 * 3600:
@@ -2002,304 +1953,7 @@ async def reev_page(request: Request):
         page="reev", vehicle=vehicle, reev=reev, consumption=consumption, signals_ok=bool(signals),
         energy_abs=energy_abs,                        # absolute electric kWh (7-day getEC split)
         reev_summary=db_reader.reev_fuel_summary(),   # on-board range-extender consumption (from trips)
-        demo=bool(is_research and request.query_params.get("demo")),
-        logbook_html=_logbook_list_html() if is_research else "",
-        raw_count=db_reader.count_raw_signals() if is_research else 0,
     ))
-
-
-def _logbook_list_html() -> str:
-    """Render the logbook entries (newest first) as the HTMX-swapped list."""
-    import datetime as _dt
-    notes = db_reader.get_logbook()
-    if not notes:
-        return '<div class="text-xs text-slate-500">—</div>'
-    out = []
-    for n in notes:
-        ts = _dt.datetime.fromtimestamp(n["ts"] / 1000).strftime("%Y-%m-%d %H:%M")
-        note = (n["note"] or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        out.append(f'<div class="flex gap-2 text-xs border-b border-slate-800 py-1.5">'
-                   f'<span class="text-slate-500 font-mono flex-shrink-0">{ts}</span>'
-                   f'<span class="text-slate-200">{note}</span></div>')
-    return "".join(out)
-
-
-@app.post("/api/research/logbook", response_class=HTMLResponse)
-async def research_logbook_add(request: Request):
-    """BetaTester only: add a timestamped logbook note, return the refreshed list."""
-    if not research.research_enabled():
-        return Response(status_code=404)
-    form = await request.form()
-    db_reader.add_logbook_note(form.get("note", ""))
-    return HTMLResponse(_logbook_list_html())
-
-
-# Which trip columns the research bundle may carry. An allow-list on purpose — see research_export.
-# Grouped by the question each group answers, because that is the only defence against it growing
-# into "everything except the coordinates" one convenient column at a time.
-_RESEARCH_TRIP_FIELDS = (
-    # identity & shape
-    "id", "started_at", "ended_at", "distance_km", "duration_min", "merged_into_id", "reconstructed",
-    # the battery, both ways of measuring it — the whole range-extender argument in four columns
-    "start_soc", "end_soc", "ec_kwh", "ec_driving", "ec_ac", "ec_other", "ec_tried", "ec_stable",
-    "efficiency_kwh_100km", "efficiency_soc", "regen_kwh",
-    # the tank, both ways of measuring it: the car's own millilitre counter and the percentage gauge
-    "fuel_start_pct", "fuel_end_pct", "fuel_start_l", "fuel_end_l",
-    # what Mate MADE of the two above — the numbers actually printed on the trip
-    "engine_ran", "engine_km", "fuel_used_l", "fuel_l_100km",
-    # ⚠️ `fuel_cost` and NOT `cost`: the electric one is added later, by _localized_trips, which the
-    # calendar goes through and this export does not. Allow-listing it would have shipped a column
-    # that is blank on every row — and a blank cost column reads as "this drive cost nothing".
-    "reev_elec_kwh", "reev_elec_kwh_100km", "fuel_cost",
-    # conditions, which is what a consumption that looks wrong usually turns out to be
-    "drive_mode", "one_pedal", "outside_temp_start_c", "outside_temp_end_c",
-    "elevation_gain_m", "elevation_loss_m",
-)
-
-# The refuels — the table a REEV cost question is made of, and the one the bundle never carried
-# (beta #36). Allow-listed, like the trips: `note` is deliberately OUT (free text a tester may put a
-# place-name into). Beyond the amounts, two columns earn their place — `vehicle_id`, because a
-# refuel scoped to a different car than the trips is exactly what zeroes a per-vehicle fuel sum, and
-# `created_at`, because a purchase entered AFTER the drive it belongs to is the other way the €/L at
-# trip-time comes out empty.
-_RESEARCH_FUEL_FIELDS = (
-    "id", "vehicle_id", "ts", "liters", "price_per_l", "total_cost", "fuel_before_pct", "created_at",
-)
-
-
-_research_export_lock = threading.Lock()
-
-
-@app.get("/api/research/export")
-async def research_export():
-    if not research.research_enabled():
-        return Response(status_code=404)
-    return await run_in_threadpool(_research_export_worker)
-
-
-def _research_export_worker():
-    # The worker owns the lock until it REALLY finishes, including after a client disconnect.
-    # Repeated clicks/tabs must not queue several expensive cloud probes and archives.
-    if not _research_export_lock.acquire(blocking=False):
-        return Response(status_code=409, headers={"Retry-After": "5"})
-    started = time.perf_counter()
-    try:
-        # The UI can now switch cars while this worker runs. Keep every scoped read (and
-        # the command client's target) on the original car, without changing the sidebar.
-        previous = getattr(db_reader._read_vehicle_scope, "vehicle_id", None)
-        db_reader._read_vehicle_scope.vehicle_id = (db_reader._current_vehicle_id(),)
-        try:
-            return _build_research_export()
-        finally:
-            db_reader._read_vehicle_scope.vehicle_id = previous
-    finally:
-        log.info("Research export total_seconds=%.3f", time.perf_counter() - started)
-        _research_export_lock.release()
-
-
-def _build_research_export():
-    """BetaTester only: build an ENCRYPTED bundle (redacted raw-signal history + logbook + trips)
-    for the tester to attach to a beta issue. GPS is stripped; the bundle is sealed to our public
-    key so only the maintainer's private key can open it."""
-    if not research.research_enabled():
-        return Response(status_code=404)
-    import csv, io, json, time, zipfile
-    timings = {}
-    checkpoint = time.perf_counter()
-
-    def mark(stage):
-        nonlocal checkpoint
-        now = time.perf_counter()
-        timings[stage] = round(now - checkpoint, 3)
-        log.info("Research export stage=%s seconds=%.3f", stage, now - checkpoint)
-        checkpoint = now
-
-    rows = research.redact_signal_rows(db_reader.get_raw_signal_rows())
-    logbook = db_reader.get_logbook(limit=1000000)
-    mark("signals_and_logbook")
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        s = io.StringIO(); w = csv.writer(s)
-        w.writerow(["ts_ms", "sig_key", "value"]); w.writerows(rows)
-        z.writestr("raw_signals_log.csv", s.getvalue())
-        s = io.StringIO(); w = csv.writer(s)
-        # The note is free text a tester types, and this file is the one they send US: same
-        # neutralisation as the exports, for the same reason (see _csv_safe).
-        w.writerow(["ts_ms", "note"]); w.writerows([(n["ts"], _csv_safe(n["note"])) for n in logbook])
-        z.writestr("logbook.csv", s.getvalue())
-        # The trips themselves — the one thing this bundle could never answer. Raw signals say what
-        # the car sent; they do not say what Mate MADE of it, and every open range-extender question
-        # is about the second (which trips got a getEC reading at all, whether the tank counter and
-        # the tank percentage agree, whether ΔSoC and getEC tell the same story on a drive the
-        # generator ran through). Without it we were reduced to reasoning from our own BEV.
-        #
-        # An ALLOW-list, not a "drop the coordinates" list: `get_trips` is SELECT *, so a column
-        # added next month would ride out of here on its own. Nothing about WHERE anyone drove
-        # leaves the machine — no coordinates, no geohashes, no addresses — and the columns that do
-        # are the ones an energy question is made of.
-        trips = db_reader.get_trips(limit=1_000_000)
-        s = io.StringIO(); w = csv.DictWriter(s, fieldnames=_RESEARCH_TRIP_FIELDS, extrasaction="ignore")
-        w.writeheader()
-        w.writerows(trips)
-        z.writestr("trips.csv", s.getvalue())
-        mark("signal_archive_and_trips")
-        # The refuels behind the fuel numbers on those trips — beta #36. The cost card recomputes the
-        # petrol cost from these rows, and the bundle used to leave them out, so a card reading €0 of
-        # fuel could not be told apart from a card that simply never saw a refuel. Oldest first.
-        fuels = db_reader.research_fuel_purchases()
-        s = io.StringIO(); w = csv.DictWriter(s, fieldnames=_RESEARCH_FUEL_FIELDS, extrasaction="ignore")
-        w.writeheader()
-        w.writerows(fuels)
-        z.writestr("fuel_purchases.csv", s.getvalue())
-        # The cloud's OWN per-trip records, as the history worker staged them. Since 4.5.3 every
-        # install stages these, range-extender accounts included, and each row carries
-        # `driveReevOil` — the fuel that drive burned according to the car's cloud. The bundle
-        # carried the AGGREGATE probes (getEC, the weekly rank, mileage/energy/detail) and never
-        # these, so the field sat in the tester's database and could not be read: whether a REEV
-        # populates it, and in litres or millilitres, is still unmeasured. Columns and order come
-        # from db_reader.RESEARCH_CLOUD_TRIP_FIELDS — one list, so a column cannot drift out.
-        cloud_trips = db_reader.research_cloud_trip_records()
-        s = io.StringIO()
-        w = csv.DictWriter(s, fieldnames=db_reader.RESEARCH_CLOUD_TRIP_FIELDS, extrasaction="ignore")
-        w.writeheader()
-        w.writerows(cloud_trips)
-        z.writestr("cloud_trip_records.csv", s.getvalue())
-        # What each PAGE made of those same trips — beta #35/#36. Three pages print three kWh/100km
-        # for one month (Statistics AVERAGES the per-trip ratios; Trips divides getEC by its own km;
-        # the Report divides getEC by ALL km), and the cost card can drop the fuel. The raw trips are
-        # above; this is each page's OWN computed output, per month, so the divergence and its inputs
-        # (energy, km, trip count, the cost breakdown) sit in the pack instead of being reproduced off
-        # a screenshot. Best-effort per part: one card that will not compute must not cost the rest.
-        _pages: dict = {"note": "each page's own monthly figures — compare kwh_100km across them"}
-        try:
-            # The Statistics PAGE's own function (year→month→day, avg_efficiency built from
-            # efficiency_kwh_100km) — NOT get_monthly_stats, which nothing renders.
-            _pages["statistics_page"] = db_reader.get_stats_grouped()
-        except Exception:  # noqa: BLE001
-            _pages["statistics_page"] = None
-        _tc: dict = {}
-        try:
-            for _yr in (_pages.get("statistics_page") or []):
-                for _mkey in (_yr.get("months") or {}):
-                    try:
-                        _y, _mo = (int(x) for x in str(_mkey).split("-")[:2])
-                        _tc[_mkey] = db_reader.get_trips_calendar_month(_y, _mo).get("total")
-                    except Exception:  # noqa: BLE001
-                        pass
-        except Exception:  # noqa: BLE001
-            pass
-        _pages["trips_page"] = _tc
-        try:
-            _pages["monthly_report"] = db_reader._collect_monthly_buckets()
-        except Exception:  # noqa: BLE001
-            _pages["monthly_report"] = None
-        try:
-            _rf = ((db_reader.reev_total_consumption() or {}).get("total_fuel_l")
-                   if db_reader.is_reev_car() else None)
-            _pages["cost_card"] = db_reader.cost_per_100km(_rf)
-        except Exception:  # noqa: BLE001
-            _pages["cost_card"] = None
-        z.writestr("page_stats.json", json.dumps(_pages, indent=2, default=str))
-        mark("fuel_and_page_statistics")
-        # Cloud consumption probe: UNMAPPED raw responses (getEC 24h/7d + 6-week rank), so a REEV's
-        # fuel/L-100km field surfaces even though the BEV mapping ignores it. Best-effort: a cloud
-        # hiccup must not fail the export.
-        cloud = None
-        try:
-            cloud = command_client.get_consumption_probe_raw()
-        except Exception:  # noqa: BLE001
-            cloud = None
-        if cloud:
-            import re as _re
-            cp = json.dumps(cloud, indent=2, ensure_ascii=False)
-            cp = _re.sub(r"LFZ[A-Z0-9]{12,}", "<VIN>", cp)  # defensive: responses carry no VIN, but scrub anyway
-            z.writestr("cloud_probes.json", cp)
-        mark("cloud_probes")
-        # The charges, and what the behaviour settings are set to — both lifted from the
-        # diagnostics bundle, which already writes them redacted (no coordinates, no location name,
-        # no free text) and has a test holding that promise.
-        #
-        # They were missing and it cost us twice. @pdifeo's beta #30 opens with "Ricarica e poi
-        # ritorno alla base" and his bundle carried 96,987 signal rows, 98 trips and not one charge
-        # — the half of the day he wrote about first. And beta #29 (@michapr) was ENTIRELY about a
-        # charge recorded as two: answering it meant asking him for a second, different file.
-        # The settings for the same reason a day later: #250 turned out to be ten lines of them (a
-        # 13.5 A detection floor on a car charging at 13), and without them we would have hunted a
-        # defect that was not there.
-        #
-        # Cheap by any measure: 20-40 charge rows over a fortnight, against a raw-signal log that is
-        # 98% of the payload.
-        try:
-            z.writestr("charges.txt", diagnostics._charges_section())
-        except Exception:  # noqa: BLE001 — a bundle must never fail on one section
-            pass
-        try:
-            z.writestr("settings.txt", diagnostics._advanced_settings_section())
-        except Exception:  # noqa: BLE001
-            pass
-        # And then the WHOLE diagnostics report, because picking sections in advance decides which
-        # questions a tester is allowed to have answered — and we got that call wrong a third time.
-        #
-        # Beta #13 (@ebagnoli, 21/08/26): he was told his "Auto-assign Home" was off. It is not in
-        # this bundle at all — `settings.txt` is the ten behaviour settings; the wallbox block lives
-        # in _cost_wallbox_section(), which only the diagnostics bundle carries. So the claim was
-        # INFERRED from his charge rows and published to him as a reading. He corrected us.
-        #
-        # The two blocks above were each lifted across after costing us exactly this, one at a time.
-        # The report is a few hundred KB of text against a raw-signal log that is 98% of the payload,
-        # it is redacted and public-shareable by build_bundle's own contract (VIN masked, GPS
-        # stripped, no free text), and this bundle is sealed to our key on top of that. There is no
-        # reason left to send anything less than all of it.
-        try:
-            try:
-                _fresh = command_client.get_diagnostic_signals()
-            except Exception:  # noqa: BLE001 — the car may be asleep; the rest of the report stands
-                _fresh = None
-            z.writestr("diagnostics.txt", diagnostics.build_bundle(MATE_VERSION, signals=_fresh))
-        except Exception:  # noqa: BLE001
-            pass
-        mark("diagnostics")
-        try:
-            _charge_count = len(db_reader.get_charges(limit=1_000_000))
-        except Exception:  # noqa: BLE001
-            _charge_count = None
-        z.writestr("meta.json", json.dumps({
-            "mate_version": MATE_VERSION,
-            "charges": _charge_count,
-            "car_type": (db_reader.get_vehicle()[0] or {}).get("car_type"),
-            "is_reev": "1" if db_reader.is_reev_car() else "0",
-            "signal_rows": len(rows), "logbook_notes": len(logbook),
-            "cloud_probes": bool(cloud),
-            "redacted_signals": sorted(research.REDACT_SIGNALS),
-            # Said here so the answer to "how much of this history has a getEC reading" is in the
-            # bundle rather than something we work out and then have to be believed about.
-            "trips": len(trips),
-            "trips_with_ec_kwh": sum(1 for t in trips if t.get("ec_kwh") is not None),
-            "trip_fields": list(_RESEARCH_TRIP_FIELDS),
-            "fuel_purchases": len(fuels),
-            "fuel_fields": list(_RESEARCH_FUEL_FIELDS),
-            "stage_seconds": timings,
-        }, indent=2))
-    encrypted = research.encrypt_bundle(buf.getvalue())
-    mark("archive_and_encryption")
-    fname = f"mate-beta-bundle-{int(time.time())}.matebeta"
-    return Response(encrypted, media_type="application/octet-stream",
-                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
-
-
-@app.get("/research/consent", response_class=HTMLResponse)
-async def research_consent_page(request: Request):
-    """One-time BetaTester consent gate (research build only)."""
-    if not research.research_enabled():
-        return RedirectResponse(request.headers.get("x-ingress-path", "") + "/")
-    lang = db_reader.get_language()
-    return templates.TemplateResponse(request, "consent.html", {"request": request, "t": i18n.get_t(lang)})
-
-
-@app.post("/research/consent")
-async def research_consent_accept(request: Request):
-    db_reader.set_setting("research_consent", "1")
-    return RedirectResponse(request.headers.get("x-ingress-path", "") + "/", status_code=303)
 
 
 def _fuel_blocked() -> bool:
@@ -2907,31 +2561,10 @@ def _parse_vehicle_status(sig: dict, vin: str | None = None, cmd_pct: int | None
 
 @app.get("/scheduling", response_class=HTMLResponse)
 async def scheduling_page(request: Request):
-    """Charge schedule (cmd 190) + climate pre-conditioning schedule (cmd 171). Both cards lazy-load
-    their current values from the car. The climate write works on the B10 (ClimaSchedulerT01 solved
-    2026-06-07 — the old code -2 was an expired start_time, now anchored to the next occurrence)."""
+    """Charge schedule (cmd 190). The card lazy-loads its current value from the car."""
     vehicle, _ = db_reader.get_vehicle()
     return templates.TemplateResponse(request, "scheduling.html", _ctx(
         page="scheduling", vehicle=vehicle,
-    ))
-
-
-@app.get("/prepare-car", response_class=HTMLResponse)
-async def prepare_car_page(request: Request):
-    """One-touch vehicle preparation (cmd 360 immediate / 361 schedule). Mirrors the official app:
-    bundle A/C + seats + steering + mirror + destination, run now or on a schedule. B10/C10 only."""
-    vehicle, _ = db_reader.get_vehicle()
-    # Inert on models without the PREPARE right (e.g. T03) — hide the page like its nav link.
-    if capability_profile.model_hidden((vehicle or {}).get("car_type", ""), "prepare_car"):
-        return RedirectResponse(request.headers.get("x-ingress-path", "") + "/")
-    ready_cfg = db_reader.get_ready_automation_config()
-    wins_stops = _wins_stops()
-    return templates.TemplateResponse(request, "prepare_car.html", _ctx(
-        page="prepare_car", vehicle=vehicle,
-        ready_cfg=ready_cfg, wins_stops=wins_stops,
-        # Slider INDEX for the saved windows_pct — same nearest-stop snap the Comandi page uses,
-        # so a value saved before the car's stop table changed still lands somewhere sane.
-        ready_wins_idx=_wins_idx(wins_stops, ready_cfg["windows_pct"] or 0),
     ))
 
 
@@ -2941,111 +2574,6 @@ async def vehicle_page(request: Request):
     return templates.TemplateResponse(request, "vehicle.html", _ctx(
         page="vehicle", vehicle=vehicle,
     ))
-
-
-@app.get("/navigation", response_class=HTMLResponse)
-async def navigation_page(request: Request):
-    vehicle, _ = db_reader.get_vehicle()
-    status = db_reader.get_latest_status()
-    return templates.TemplateResponse(request, "navigation.html", _ctx(
-        page="navigation", vehicle=vehicle, status=status,
-    ))
-
-
-@app.get("/api/nav/geocode", response_class=JSONResponse)
-async def nav_geocode(address: str = "", city: str = ""):
-    import asyncio
-    provider = db_reader.get_setting("geocoder_provider", "")
-    key = db_reader.get_secret("geocoder_key", "") or None
-    try:
-        res = await asyncio.get_event_loop().run_in_executor(
-            None, geocode.geocode, address, city, provider, key)
-    except Exception as e:  # noqa: BLE001
-        return JSONResponse({"error": str(e)}, status_code=502)
-    if not res:
-        return JSONResponse({"error": "not_found"}, status_code=404)
-    return JSONResponse(res)
-
-
-@app.get("/api/nav/current-address", response_class=PlainTextResponse)
-async def nav_current_address():
-    import asyncio
-    status = db_reader.get_latest_status() or {}
-    lat, lon = status.get("latitude"), status.get("longitude")
-    if not lat or not lon:
-        return HTMLResponse("—")
-    provider = db_reader.get_setting("geocoder_provider", "")
-    key = db_reader.get_secret("geocoder_key", "") or None
-    try:
-        addr = await asyncio.get_event_loop().run_in_executor(
-            None, geocode.reverse_geocode, lat, lon, provider, key)
-    except Exception:  # noqa: BLE001
-        addr = None
-    # The address is OpenStreetMap's (or another geocoder's) text, which anyone can edit: plain
-    # text, so the page puts it in as text and a direct visit to this URL renders nothing.
-    return PlainTextResponse(addr or "—")
-
-
-@app.post("/api/nav/send", response_class=HTMLResponse)
-async def nav_send(request: Request):
-    import asyncio
-    form = await request.form()
-    try:
-        lat = float(form.get("lat"))
-        lon = float(form.get("lon"))
-    except (TypeError, ValueError):
-        return HTMLResponse('<span style="color:#ef4444">✗</span>', status_code=400)
-    address = (form.get("address") or "").strip()
-    name = (form.get("name") or address or "Destinazione")[:30]
-    ok, msg = await asyncio.get_event_loop().run_in_executor(
-        None, command_client.send_destination, name, address, lat, lon)
-    t = i18n.get_t(db_reader.get_language())
-    if ok:
-        return HTMLResponse(f'<span style="color:#22c55e">✓ {t("nav_sent")}</span>')
-    return HTMLResponse(_cmd_error_html(msg))
-
-
-@app.get("/api/nav/chargers", response_class=JSONResponse)
-async def nav_chargers(radius: int = 2000, q: str = "", n: int = 25):
-    """Public charging stations around the car's current position (Navigation page),
-    nearest first. OSM (keyless) + Open Charge Map (with key) + the Italian PUN.
-    `q` filters by operator/network (e.g. 'electra') — handy in dense areas where a
-    specific network sits beyond the nearest few. `n` is the page size (how many to
-    show: 25/50/100) — in a dense city the nearest 25 all sit within ~2 km, so a
-    larger `n` is what actually reaches farther out. With no `q`, an empty radius
-    auto-widens to the nearest stations within 10 km (`widened`)."""
-    import asyncio
-    status = db_reader.get_latest_status() or {}
-    lat, lon = status.get("latitude"), status.get("longitude")
-    if not lat or not lon:
-        return JSONResponse({"error": "no_position"}, status_code=404)
-    radius = max(250, min(radius, 10000))
-    q = (q or "").strip()[:40]
-    limit = n if n in (25, 50, 100) else 25
-    loop = asyncio.get_event_loop()
-    try:
-        res = await loop.run_in_executor(
-            None, charger_locator.find_nearby, lat, lon, radius, limit, q)
-        widened = False
-        # Auto-widen only the unfiltered "nearest" view: climb a radius ladder so the
-        # first non-empty rung gives a small, complete (truly-nearest) set. With an
-        # operator filter, an empty result is a real "this network isn't nearby".
-        if res == [] and not q:
-            for wider in (2500, 5000, 10000):
-                if wider <= radius:
-                    continue
-                res = await loop.run_in_executor(
-                    None, charger_locator.find_nearby, lat, lon, wider, 5)
-                if res:           # found some — stop climbing
-                    widened = True
-                    break
-                if res is None:   # transient error — handled below
-                    break
-    except Exception as e:  # noqa: BLE001
-        return JSONResponse({"error": str(e)}, status_code=502)
-    if res is None:  # every source down/rate-limited
-        return JSONResponse({"error": "unreachable"}, status_code=502)
-    return JSONResponse({"chargers": res, "widened": widened})
 
 
 @app.get("/api/vehicle-status", response_class=HTMLResponse)
@@ -3096,9 +2624,6 @@ async def settings_page(request: Request):
     vehicle, settings = db_reader.get_vehicle()
     prices = db_reader.get_charge_prices()
     settings = {**settings, **prices,
-                "abrp_enabled": db_reader.get_setting("abrp_enabled", "0"),
-                "abrp_token_set": db_reader.abrp_token_in_use(),
-                "abrp_cars_without_token": db_reader.abrp_cars_without_token(),
                 "mqtt_enabled": db_reader.get_setting("mqtt_enabled", "0"),
                 "mqtt_broker": db_reader.get_setting("mqtt_broker", ""),
                 "mqtt_port": db_reader.get_setting("mqtt_port", "1883"),
@@ -3110,9 +2635,6 @@ async def settings_page(request: Request):
                 "mqtt_discovery": db_reader.get_setting("mqtt_discovery", "1"),
                 "geocoder_provider": db_reader.get_setting("geocoder_provider", ""),
                 "geocoder_key_set": bool(db_reader.get_setting("geocoder_key", "")),
-                "charger_locator": db_reader.get_setting("charger_locator", "0"),
-                "charger_locator_ocm_key_set": bool(db_reader.get_setting("ocm_key", "")),
-                "charger_locator_tomtom_key_set": bool(db_reader.get_setting("tomtom_key", "")),
                 "positions_retention_days": db_reader.get_setting("positions_retention_days", "0"),
                 "desktop_autostart": db_reader.get_setting("desktop_autostart", "0"),
                 "map_station_min_sessions": db_reader.get_setting("map_station_min_sessions", "1"),
@@ -3124,31 +2646,6 @@ async def settings_page(request: Request):
                 "default_drive_mode": db_reader.get_setting("default_drive_mode", ""),
                 "default_one_pedal": db_reader.get_setting("default_one_pedal", ""),
                 "db_size_mb": round(db_reader.get_db_size_bytes() / 1048576, 1)}
-    from datetime import date
-    from cloud_import_policy import import_from, past_months, trips_enabled
-    settings["cloud_import_available"] = not __import__("api_backend").is_china()
-    settings["cloud_import_trips"] = trips_enabled(db_reader._get())
-    # The earlier months on offer: September 2026 to last month (cloud_import_policy.FIRST_MONTH).
-    # Each says what it adds, on a line under the menu: the count does not fit inside it — at
-    # 1024 px the closed menu has 138 px and "Da settembre 2026 (6 mesi)" needs 182.
-    lang = db_reader.get_language()
-    t = i18n.get_t(lang)
-    offered = [(y, m, i18n.fmt_month_year(lang, date(y, m, 1)))
-               for y, m in past_months(db_reader.today_local())]
-
-    def span(i):
-        n, first, last = len(offered) - i, offered[i][2], offered[-1][2]
-        return (t("cloud_import_span_one").format(first=first) if n == 1
-                else t("cloud_import_span_many").format(n=n, first=first, last=last))
-
-    settings["cloud_import_months"] = [(f"{y:04d}-{m:02d}", label, span(i))
-                                       for i, (y, m, label) in enumerate(offered)]
-    chosen = import_from(db_reader._get())
-    settings["cloud_import_from"] = f"{chosen[0]:04d}-{chosen[1]:02d}" if chosen else ""
-    settings["cloud_import_span"] = next((sp for value, _, sp in settings["cloud_import_months"]
-                                          if value == settings["cloud_import_from"]),
-                                         t("cloud_import_span_none"))
-    settings["cloud_import_span_none"] = t("cloud_import_span_none")
     # Per-card open/collapsed state for the settings accordion — saved in the DB (shared
     # across devices). Cards start collapsed so the page stays compact, EXCEPT 'vehicle': it's
     # tiny (model + VIN + the Logout/change-account button) and keeping it open makes the logout
@@ -3989,63 +3486,6 @@ async def charge_look_up_address(request: Request, charge_id: int):
     return _charge_location_line(request, charge, t, lookup=lookup)
 
 
-@app.post("/api/charges/{charge_id}/locate", response_class=HTMLResponse)
-async def relocate_charge(request: Request, charge_id: int):
-    """Manual 📍 recalculation, on demand — unlike the automatic background sweep
-    (charger_locator.sweep_now, which silently picks the nearest name), this lets the
-    user re-run the lookup for one charge and, when there's more than one plausible
-    match, choose instead of Mate guessing (see find_station_candidates)."""
-    import asyncio
-    charge = db_reader.get_charge_location(charge_id)
-    t = i18n.get_t(db_reader.get_language())
-    if not charge or not charge.get("latitude") or not charge.get("longitude"):
-        return _charge_location_line(request, charge or {"id": charge_id}, t, error=True)
-    options, ok = await asyncio.get_event_loop().run_in_executor(
-        None, charger_locator.find_station_candidates, charge["latitude"], charge["longitude"])
-    if not ok:
-        return _charge_location_line(request, charge, t, error=True)
-    if not options:
-        # Nothing found — but this charge may already carry a name, from a source that has
-        # since dropped the station, or from a keyed source (Open Charge Map) whose key the
-        # user has since removed. Writing the empty answer here would not just blank the label:
-        # '' is the sweep's "resolved as nothing here" sentinel, so the name would never be
-        # looked up again. A button that quietly destroys what it was asked to refresh is worse
-        # than one that says it found nothing. On a charge with no name either, writing nothing
-        # simply leaves it to the ongoing sweep, exactly as if the button had never been pressed.
-        return _charge_location_line(request, charge, t, not_found=True)
-    if len(options) == 1:
-        name, url = options[0].get("name") or "", options[0].get("url")
-        db_reader.set_charge_location_name(charge_id, name, url)
-        charge["location_name"], charge["location_url"] = name, url
-        return _charge_location_line(request, charge, t)
-    return templates.TemplateResponse(request, "partials/charge_location_choices.html",
-                                      {"charge": charge, "options": options, "t": t})
-
-
-@app.post("/api/charges/{charge_id}/locate/confirm", response_class=HTMLResponse)
-async def confirm_charge_location(request: Request, charge_id: int):
-    """User's pick from the ambiguity popup (find_station_candidates found more than
-    one plausible station) — persists it exactly like the automatic sweep would."""
-    form = await request.form()
-    name = (form.get("name") or "").strip()
-    url = (form.get("url") or "").strip() or None
-    charge = db_reader.get_charge_location(charge_id)
-    if not charge:
-        return HTMLResponse("", status_code=404)
-    db_reader.set_charge_location_name(charge_id, name, url)
-    charge["location_name"], charge["location_url"] = name, url
-    t = i18n.get_t(db_reader.get_language())
-    return _charge_location_line(request, charge, t)
-
-
-@app.get("/api/charges/{charge_id}/locate/cancel", response_class=HTMLResponse)
-async def cancel_charge_location(request: Request, charge_id: int):
-    """Dismiss the ambiguity popup without changing anything already saved."""
-    charge = db_reader.get_charge_location(charge_id)
-    t = i18n.get_t(db_reader.get_language())
-    return _charge_location_line(request, charge or {"id": charge_id}, t)
-
-
 @app.post("/api/charges/{charge_id}/locate/manual", response_class=HTMLResponse)
 async def set_manual_charge_location(request: Request, charge_id: int):
     """✏️ free-text station name — for a station OSM/OCM simply doesn't have (#193:
@@ -4055,28 +3495,13 @@ async def set_manual_charge_location(request: Request, charge_id: int):
     IS NOT NULL either way, so the background sweep (_LOCATION_CANDIDATES_WHERE) never
     revisits this charge. An empty submission changes nothing (closes the input with
     whatever was already saved, same as clicking away).
-    #301: an Open Charge Map identifier in the field — a pasted OCM link, "OCM-280221", or
-    the bare number — is not a name: that exact POI is fetched by id and saved with its own
-    name and link, same as a pick from 🔄. Nothing is searched, so nothing can be guessed
-    wrong. Its coordinates are NOT written: a charge without them is how a hand-typed one is
-    recognised, and the station's position is not where the car was. When the fetch fails
-    nothing is written either — the id is not a label, and saving it as one would bury it."""
-    import asyncio
+    The label is stored locally and never resolved through an external station provider."""
     form = await request.form()
     name = (form.get("name") or "").strip()[:200]
     charge = db_reader.get_charge_location(charge_id)
     if not charge:
         return HTMLResponse("", status_code=404)
     t = i18n.get_t(db_reader.get_language())
-    poi_id = charger_locator.parse_ocm_id(name)
-    if poi_id:
-        st, reason = await asyncio.get_event_loop().run_in_executor(
-            None, charger_locator.ocm_station_by_id, poi_id)
-        if reason:
-            return _charge_location_line(request, charge, t, ocm_error=reason)
-        db_reader.set_charge_location_name(charge_id, st["name"][:200], st["url"])
-        charge["location_name"], charge["location_url"] = st["name"][:200], st["url"]
-        return _charge_location_line(request, charge, t)
     if name:
         db_reader.set_charge_location_name(charge_id, name, None)
         charge["location_name"], charge["location_url"] = name, None
@@ -4162,22 +3587,6 @@ def _typed_charge_payload(form) -> tuple[dict | None, str | None]:
     }, None
 
 
-@app.post("/api/charges/manual", response_class=HTMLResponse)
-async def add_manual_charge_api(request: Request):
-    """Add a historical charge by hand (#87) — for sessions from before Mate was installed, so the
-    lifetime totals / monthly report are complete. Only date+energy are required; cost and AC/DC are
-    optional. No power curve (manual entries carry no telemetry); SoC and an end time can be given
-    through the CSV import or corrected afterwards on the charge itself (#188)."""
-    form = await request.form()
-    t = i18n.get_t(db_reader.get_language())
-    payload, error = _typed_charge_payload(form)
-    if error:
-        return HTMLResponse(f'<span style="color:#ef4444">✗ {t(error)}</span>', status_code=400)
-    db_reader.add_manual_charge(**payload)
-    return HTMLResponse(f'<span style="color:#22c55e">✓ {t("manual_charge_added")}</span>',
-                        headers={"HX-Trigger": "chargeAdded"})
-
-
 @app.post("/api/charges/{charge_id}/edit", response_class=HTMLResponse)
 async def edit_manual_charge_api(request: Request, charge_id: int):
     """Correct a charge that was typed in — the times, the SoC, the energy, the cost (#188).
@@ -4196,63 +3605,6 @@ async def edit_manual_charge_api(request: Request, charge_id: int):
         return HTMLResponse(f'<span style="color:#ef4444">✗ {t("charge_edit_not_manual")}</span>', status_code=400)
     return HTMLResponse(f'<span style="color:#22c55e">✓ {t("charge_edit_saved")}</span>',
                         headers={"HX-Trigger": "chargeAdded"})
-
-
-@app.get("/api/charges/import-template.csv")
-async def charges_import_template():
-    """The empty, self-documenting CSV the user fills in and re-imports (idea from #111)."""
-    import charge_import
-    return Response(
-        charge_import.TEMPLATE,
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="leapmotor-mate-charges-template.csv"'},
-    )
-
-
-@app.post("/api/charges/import", response_class=HTMLResponse)
-async def charges_import_api(request: Request):
-    """Bulk-import historical charges from the filled-in CSV (#111). Each clean line goes in through the
-    SAME path as a manual entry; each rejected line is reported with its reason — one typo never blocks
-    the whole file, and dirty data never reaches the DB."""
-    from html import escape as _esc
-    import charge_import
-    t = i18n.get_t(db_reader.get_language())
-    form = await request.form()
-    up = form.get("file")
-    if up is None or not hasattr(up, "read"):
-        return HTMLResponse(f'<span style="color:#ef4444">✗ {t("import_no_file")}</span>', status_code=400)
-    raw = await up.read()
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8-sig", "replace")        # utf-8-sig drops the BOM Excel prepends
-    rows, errors = charge_import.parse_charge_csv(raw, tz=db_reader._local_tz())
-    # #237 — a line that matches a session already here FILLS IT IN (the odometer) instead of adding
-    # a second copy. Re-importing used to double the archive in silence; it now says which lines were
-    # new and which were completed, because "152 imported" reads identically in both worlds.
-    added = filled = 0
-    for r in rows:
-        outcome = db_reader.import_charge_row(r)
-        added += outcome == "added"
-        filled += outcome == "filled"
-    parts = []
-    if added:
-        parts.append(f'<span style="color:#22c55e">✓ {_esc(t("import_done").format(n=added))}</span>')
-    if filled:
-        parts.append(f'<span style="color:#22c55e">{" · " if added else "✓ "}'
-                     f'{_esc(t("import_filled").format(n=filled))}</span>')
-    if errors:
-        shown = "".join(f"<li>{_esc(e)}</li>" for e in errors[:50])
-        more = f'<li>… (+{len(errors) - 50})</li>' if len(errors) > 50 else ""
-        parts.append(f'<div style="color:#f59e0b;margin-top:6px">⚠ {_esc(t("import_skipped").format(n=len(errors)))}'
-                     f'<ul style="margin:4px 0 0 18px;list-style:disc;font-size:12px">{shown}{more}</ul></div>')
-    # Every line already present and carrying nothing new: not an error, and emphatically not
-    # "imported 152". Silence would be worse — the user would re-upload, and before #237 that is
-    # exactly how an archive doubled.
-    if rows and not added and not filled and not errors:
-        parts.append(f'<span style="color:#94a3b8">{_esc(t("import_all_known").format(n=len(rows)))}</span>')
-    if not rows and not errors:
-        parts.append(f'<span style="color:#94a3b8">{_esc(t("import_none"))}</span>')
-    return HTMLResponse("".join(parts),
-                        headers={"HX-Trigger": "chargeAdded"} if (added or filled) else {})
 
 
 @app.get("/api/charge/{charge_id}/power-chart", response_class=HTMLResponse)
@@ -4401,41 +3753,6 @@ async def save_cost_dynamic(request: Request):
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("costs_saved")}</span>')
 
 
-@app.post("/api/settings/cloud-import", response_class=HTMLResponse)
-async def save_cloud_import(request: Request):
-    from cloud_import_policy import FROM_KEY, KEY, past_months
-    form = await request.form()
-    db_reader.set_setting(KEY, "1" if form.get("cloud_import_trips") == "1" else "0")
-    # Only a month the card offers, or "" for the current month only. Absent when the card had no
-    # earlier month to offer (September 2026 itself): the setting is then left as it is.
-    chosen = form.get("cloud_import_from")
-    offered = {f"{y:04d}-{m:02d}" for y, m in past_months(db_reader.today_local())}
-    if chosen == "" or chosen in offered:
-        db_reader.set_setting(FROM_KEY, chosen)
-    t = i18n.get_t(db_reader.get_language())
-    return HTMLResponse(f'<span style="color:#22c55e">{t("cloud_import_saved")}</span>')
-
-
-@app.post("/api/settings/abrp", response_class=HTMLResponse)
-async def save_abrp(request: Request):
-    """Enable/disable ABRP live telemetry and store the user's personal token."""
-    form = await request.form()
-    db_reader.set_setting("abrp_enabled", "1" if form.get("abrp_enabled") in ("1", "on", "true") else "0")
-    tok = (form.get("abrp_token") or "").strip()
-    vin = ((form.get("vin") or "") if isinstance(form.get("vin"), str) else "").strip()
-    if tok:  # masked field: only overwrite on a non-empty submit (keep existing otherwise)
-        # ABRP is one token per VEHICLE on ABRP's side too, so with two cars each wants its own
-        # (#186): one token for both fed a single ABRP vehicle two cars' positions and SoCs.
-        if vin:
-            if not any(v.get("vin") == vin for v in db_reader.get_vehicles()):
-                return HTMLResponse("unknown vin", status_code=422)
-            db_reader.set_secret(f"abrp_token_{vin.lower()}", tok)
-        else:
-            db_reader.set_secret("abrp_token", tok)
-    t = i18n.get_t(db_reader.get_language())
-    return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("abrp_saved")}</span>')
-
-
 @app.post("/api/settings/geocoder", response_class=HTMLResponse)
 async def save_geocoder(request: Request):
     """Store the geocoding provider and its optional API key, used for better address/house-number
@@ -4453,84 +3770,7 @@ async def save_geocoder(request: Request):
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("geocoder_saved")}</span>')
 
 
-@app.post("/api/settings/charger-locator", response_class=HTMLResponse)
-async def save_charger_locator(request: Request):
-    """Toggle the 📍 station labels. Turning it ON kicks an immediate background backfill
-    of the unlabelled public charges (history included); the Navigation page search is
-    user-triggered and independent of this toggle."""
-    import asyncio
-    form = await request.form()
-    on = "1" if form.get("charger_locator") else "0"
-    db_reader.set_setting("charger_locator", on)
-    okey = (form.get("charger_locator_ocm_key") or "").strip()
-    if okey:
-        db_reader.set_secret("ocm_key", okey)
-    tkey = (form.get("charger_locator_tomtom_key") or "").strip()
-    if tkey:
-        db_reader.set_secret("tomtom_key", tkey)
-    t = i18n.get_t(db_reader.get_language())
-    if on == "1" and db_reader.has_location_lookup_candidates():
-        asyncio.get_event_loop().run_in_executor(None, charger_locator.sweep_now)
-        return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("charger_locator_started")}</span>')
-    return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("charger_locator_saved")}</span>')
-
-
-def _key_test_html(label: str, ok: bool, reason: "str | None", t) -> str:
-    if ok:
-        return f'<span style="color:#22c55e;font-size:13px">🟢 {label}: {t("charger_locator_key_ok")}</span>'
-    msg = t("charger_locator_key_invalid") if reason == "invalid_key" else t("charger_locator_key_error")
-    return f'<span style="color:#ef4444;font-size:13px">🔴 {label}: {msg}</span>'
-
-
-@app.post("/api/settings/charger-locator/test", response_class=HTMLResponse)
-async def test_charger_locator_keys(request: Request):
-    """Verify the OCM/TomTom keys currently in the form actually work, BEFORE saving —
-    same empty-submit-means-saved-value convention as the MQTT password test (#91):
-    the fields are masked (type=password), so an empty submit falls back to the
-    already-saved secret rather than testing an empty string."""
-    import asyncio
-    form = await request.form()
-    okey = (form.get("charger_locator_ocm_key") or "").strip() or db_reader.get_secret("ocm_key", "")
-    tkey = (form.get("charger_locator_tomtom_key") or "").strip() or db_reader.get_secret("tomtom_key", "")
-    t = i18n.get_t(db_reader.get_language())
-    if not okey and not tkey:
-        return HTMLResponse(f'<span style="color:#94a3b8;font-size:13px">{t("charger_locator_test_none")}</span>')
-    loop = asyncio.get_event_loop()
-    parts = []
-    if okey:
-        ok, reason = await loop.run_in_executor(None, charger_locator.test_ocm_key, okey)
-        parts.append(_key_test_html("Open Charge Map", ok, reason, t))
-    if tkey:
-        ok, reason = await loop.run_in_executor(None, charger_locator.test_tomtom_key, tkey)
-        parts.append(_key_test_html("TomTom", ok, reason, t))
-    return HTMLResponse("<br>".join(parts))
-
-
-@app.post("/api/settings/charger-locator/backfill", response_class=HTMLResponse)
-async def backfill_charger_links(request: Request):
-    """One-time recovery of the 🔗 link on charges labelled BEFORE location_url
-    existed (or resolved from a link-less source alone, e.g. PUN) — never touches the
-    already-saved name. Runs in the background (can take a while, one Overpass call
-    per charge); charger_locator.backfill_urls_now is single-flight, so clicking again
-    while one is running is a safe no-op.
-
-    A run handles at most _BACKFILL_LIMIT charges — Overpass is free and shared, and
-    emptying a long backlog in one burst is how an IP earns a temporary block. So the
-    count is shown: "50/137" tells the user this took a bite, not the whole thing, and
-    that pressing again is the way to continue."""
-    import asyncio
-    t = i18n.get_t(db_reader.get_language())
-    pending = len(db_reader.get_labelled_charges_missing_url(10000))
-    if not pending:
-        return HTMLResponse(f'<span style="color:#94a3b8;font-size:13px">{t("charger_locator_backfill_none")}</span>')
-    asyncio.get_event_loop().run_in_executor(None, charger_locator.backfill_urls_now)
-    batch = min(pending, charger_locator._BACKFILL_LIMIT)
-    tail = f" — {batch}/{pending}" if pending > batch else ""
-    return HTMLResponse(
-        f'<span style="color:#22c55e;font-size:13px">{t("charger_locator_backfill_started")}{tail}</span>')
-
-
-@app.post("/api/settings/charger-locator/map-threshold", response_class=HTMLResponse)
+@app.post("/api/settings/map-station-threshold", response_class=HTMLResponse)
 async def save_map_station_threshold(request: Request):
     """Minimum charges at the same GPS spot before it earns a marker among the Map's
     Charging stations (get_charging_stations' min_sessions). Default 1 — every station,
@@ -4779,8 +4019,8 @@ async def test_mqtt(request: Request):
 
 # Every collapsible card on the Settings accordion. Used both to build the initial
 # open/collapsed map and as the allowlist for the ui-state save endpoint.
-_UI_CARD_KEYS = {"cloud_import", "locale", "vehicle", "battery", "polling", "charge_detect", "trips", "advanced",
-                 "abrp", "geocoder", "charger_locator", "wallbox", "mqtt", "tyres",
+_UI_CARD_KEYS = {"locale", "vehicle", "battery", "polling", "charge_detect", "trips", "advanced",
+                 "geocoder", "map_display", "wallbox", "mqtt", "tyres",
                  "database", "export", "diagnostics"}
 
 # Settings sections flagged "new in a recent release": the section shows a NEW badge on its header
@@ -4916,18 +4156,6 @@ def _status_dot(color: str, label: str) -> HTMLResponse:
         f'<span class="w-2 h-2 rounded-full bg-{color}-400"></span>{label}</span>')
 
 
-@app.get("/api/settings/abrp/status", response_class=HTMLResponse)
-async def abrp_status(request: Request):
-    """At-a-glance ABRP state for the collapsed summary. ABRP is fire-and-forget
-    telemetry (no live connection to test), so this reflects config state."""
-    t = i18n.get_t(db_reader.get_language())
-    if db_reader.get_setting("abrp_enabled", "0") != "1":
-        return _status_dot("slate", t("status_off"))
-    if not db_reader.abrp_token_in_use():
-        return _status_dot("amber", t("status_unconfigured"))
-    return _status_dot("emerald", t("status_active"))
-
-
 @app.get("/api/settings/mqtt/status", response_class=HTMLResponse)
 async def mqtt_status(request: Request):
     """Live MQTT broker state for the collapsed summary — grey when off, amber when
@@ -4956,8 +4184,8 @@ async def set_language(request: Request):
     """Change the UI language after setup. Saved to the DB, then the page is reloaded
     (HX-Refresh) so every server-rendered string switches to the new language."""
     form = await request.form()
-    lang = form.get("language", "en")
-    db_reader.set_setting("language", lang if lang in ("en", "it", "fr", "de", "pl", "pt-PT", "nl", "es", "cs", "zh-TW", "zh-CN") else "en")
+    lang = form.get("language", "zh-CN")
+    db_reader.set_setting("language", lang if lang in ("zh-CN", "zh-TW", "en") else "zh-CN")
     return Response(status_code=204, headers={"HX-Refresh": "true"})
 
 
@@ -5055,19 +4283,6 @@ async def dismiss_desktop_notice(request: Request):
     # 204, and the bar stayed. An empty 200 lets the delete happen, which is what the paragraph
     # above wanted: the element goes, the page does not reload.
     return Response(status_code=200)
-
-
-@app.post("/api/settings/dismiss-beta-notice")
-async def dismiss_beta_notice(request: Request):
-    """Hide the BetaTester banner once the tester has read it.
-
-    On a phone it sat above the open menu and hid its top entries (@ebagnoli, beta #13) — a warning
-    standing between someone and the navigation. Lowering it was the fix; letting it be closed is
-    what stops it being in the way at all. Nothing is lost by closing it: the BETA badge next to the
-    version says which build this is for as long as the install lives, which is the part a tester
-    running two instances side by side actually needs."""
-    db_reader.set_setting("beta_notice_dismissed", "1")
-    return Response(status_code=200)   # 200, not 204 — see dismiss_desktop_notice
 
 
 @app.post("/api/settings/desktop-autostart", response_class=HTMLResponse)
@@ -6369,182 +5584,6 @@ async def save_charge_schedule_api(request: Request):
     return HTMLResponse(_cmd_error_html(msg))
 
 
-@app.get("/api/climate-schedule")
-async def get_climate_schedule_api():
-    """Current climate (pre-conditioning) schedule (read-only) — populates the Scheduling-page form.
-    Returns the first entry (Mate manages a single climate schedule) or {}."""
-    import asyncio
-    sched = await asyncio.get_event_loop().run_in_executor(None, command_client.get_climate_schedule)
-    return (sched or [{}])[0] if sched else {}
-
-
-@app.post("/api/climate-schedule", response_class=HTMLResponse)
-async def save_climate_schedule_api(request: Request):
-    """Write the climate (pre-conditioning) schedule (cmd 171). WORKS on the B10 — the historic
-    code -2 was an expired start_time (ClimaSchedulerT01, solved 2026-06-07); save_climate_schedule
-    anchors start_time to the next future occurrence. Mate manages a single climate entry (full
-    replacement). `preset` ∈ cool|heat|vent|defrost|none; `days` are 0=Sun..6=Sat. Fired only on save."""
-    import re, asyncio
-    form = await request.form()
-    enabled = (form.get("enabled") or "") in ("1", "on", "true", "True")
-    preset = (form.get("preset") or "cool").strip()
-    start = (form.get("start_time") or "").strip()
-    days = sorted(int(d) for d in form.getlist("days") if str(d).isdigit() and 0 <= int(d) <= 6)
-    try:
-        temp = int(form.get("temperature") or 25)
-    except (ValueError, TypeError):
-        temp = 25
-    t = i18n.get_t(db_reader.get_language())
-    if preset not in command_client.CLIMATE_PRESETS:
-        return HTMLResponse('<span style="color:#ef4444">✗ preset</span>', status_code=400)
-    if enabled and not re.match(r"^\d{2}:\d{2}$", start):
-        return HTMLResponse(f'<span style="color:#ef4444">✗ {t("sched_bad_time")}</span>', status_code=400)
-    ok, msg = await asyncio.get_event_loop().run_in_executor(
-        None, lambda: command_client.save_climate_schedule(
-            enabled=enabled, preset=preset, start_hhmm=start or "07:00",
-            day_positions=days, temperature=temp))
-    if ok:
-        return HTMLResponse(f'<span style="color:#22c55e">✓ {t("sched_saved")}</span>',
-                            headers={"HX-Trigger": "climateScheduleSaved"})
-    return HTMLResponse(_cmd_error_html(msg))
-
-
-# ── One-touch prepare-car (cmd 360 immediate / 361 schedule) ─────────────────────────────────
-def _parse_prepare_form(form) -> dict:
-    """Build the prepare-car bundle (datacontent) from form fields. Off dimensions are omitted."""
-    ac_mode = (form.get("ac_mode") or "off").strip()
-    ac_preset = ac_mode if ac_mode in command_client.CLIMATE_PRESETS else None
-    try:
-        ac_temp = int(form.get("ac_temperature") or 25)
-    except (ValueError, TypeError):
-        ac_temp = 25
-    seats = {s: (form.get("seat_" + s) or "off") for s in ("driver", "copilot", "left_rear", "right_rear")}
-    seats = {k: (v if v in ("off", "heat", "vent") else "off") for k, v in seats.items()}
-    steering = (form.get("steering") or "") in ("1", "on", "true", "True")
-    mirror = (form.get("mirror") or "") in ("1", "on", "true", "True")
-    dest = None
-    dlat, dlon = (form.get("dest_lat") or "").strip(), (form.get("dest_lon") or "").strip()
-    if dlat and dlon:
-        try:
-            float(dlat); float(dlon)
-            dest = {"lat": dlat, "lon": dlon, "address": (form.get("dest_address") or "").strip(),
-                    "name": (form.get("dest_name") or "").strip(), "key": ""}
-        except (ValueError, TypeError):
-            dest = None
-    return command_client.build_prepare_bundle(
-        ac_preset=ac_preset, ac_temperature=ac_temp, seats=seats,
-        steering=steering, mirror=mirror, dest=dest)
-
-
-@app.get("/api/prepare-car/schedules", response_class=HTMLResponse)
-async def prepare_car_schedules_api(request: Request):
-    """Render the current one-touch prepare-car schedule list (cmd 361, read-only)."""
-    import asyncio
-    entries = await asyncio.get_event_loop().run_in_executor(None, command_client.get_prepare_car_schedule)
-    return templates.TemplateResponse(request, "partials/prepare_car_list.html",
-                                      _ctx(entries=entries or []))
-
-
-@app.post("/api/prepare-car/schedule", response_class=HTMLResponse)
-async def save_prepare_car_schedule_api(request: Request):
-    """Add or edit (by set_id) one prepare-car schedule entry (cmd 361). Full-state replacement: we
-    read the current list, replace/append our entry, and write them all back. start_time is anchored
-    to the next future occurrence (the -2 expired-appointment lesson). Fired only on save."""
-    import re, asyncio, time as _t
-    form = await request.form()
-    t = i18n.get_t(db_reader.get_language())
-    start = (form.get("start_time") or "").strip()
-    if not re.match(r"^\d{2}:\d{2}$", start):
-        return HTMLResponse(f'<span style="color:#ef4444">✗ {t("sched_bad_time")}</span>', status_code=400)
-    days = sorted(int(d) for d in form.getlist("days") if str(d).isdigit() and 0 <= int(d) <= 6)
-    set_id = (form.get("set_id") or "").strip() or None
-    bundle = _parse_prepare_form(form)
-    if not bundle:
-        return HTMLResponse(f'<span style="color:#ef4444">✗ {t("prep_pick_one")}</span>', status_code=400)
-
-    def _save():
-        cur = command_client.get_prepare_car_schedule() or []
-        entry = command_client.build_prepare_entry(
-            bundle=bundle, start_hhmm=start, day_positions=days, set_id=set_id)
-        others = []
-        for e in cur:
-            if e.get("set_id") == entry["set_id"]:
-                continue
-            e = dict(e)
-            e.setdefault("update_time", str(int(_t.time() * 1000)))  # keep preserved entries writable
-            others.append(e)
-        return command_client.set_prepare_car_schedule(others + [entry])
-
-    ok, msg = await asyncio.get_event_loop().run_in_executor(None, _save)
-    if ok:
-        return HTMLResponse(f'<span style="color:#22c55e">✓ {t("sched_saved")}</span>',
-                            headers={"HX-Trigger": "prepareCarSaved"})
-    return HTMLResponse(_cmd_error_html(msg))
-
-
-@app.post("/api/prepare-car/schedule/delete", response_class=HTMLResponse)
-async def delete_prepare_car_schedule_api(request: Request):
-    """Delete one prepare-car schedule entry by set_id (writes back the remaining list)."""
-    import asyncio, time as _t
-    form = await request.form()
-    t = i18n.get_t(db_reader.get_language())
-    set_id = (form.get("set_id") or "").strip()
-
-    def _del():
-        cur = command_client.get_prepare_car_schedule() or []
-        remaining = []
-        for e in cur:
-            if e.get("set_id") == set_id:
-                continue
-            e = dict(e)
-            e.setdefault("update_time", str(int(_t.time() * 1000)))
-            remaining.append(e)
-        return command_client.set_prepare_car_schedule(remaining)
-
-    ok, msg = await asyncio.get_event_loop().run_in_executor(None, _del)
-    if ok:
-        return HTMLResponse(f'<span style="color:#22c55e">✓ {t("sched_saved")}</span>',
-                            headers={"HX-Trigger": "prepareCarSaved"})
-    return HTMLResponse(_cmd_error_html(msg))
-
-
-@app.post("/api/prepare-car/now", response_class=HTMLResponse)
-async def prepare_car_now_api(request: Request):
-    """Trigger an IMMEDIATE one-touch preparation (cmd 360). ⚠️ Actuates the car now."""
-    import asyncio
-    form = await request.form()
-    t = i18n.get_t(db_reader.get_language())
-    bundle = _parse_prepare_form(form)
-    if not bundle:
-        return HTMLResponse(f'<span style="color:#ef4444">✗ {t("prep_pick_one")}</span>', status_code=400)
-    ok, msg = await asyncio.get_event_loop().run_in_executor(
-        None, lambda: command_client.prepare_car_now(bundle))
-    if ok:
-        return HTMLResponse(f'<span style="color:#22c55e">✓ {t("prep_sent")}</span>')
-    return HTMLResponse(_cmd_error_html(msg))
-
-
-@app.post("/api/prepare-car/off", response_class=HTMLResponse)
-async def prepare_car_off_api(request: Request):
-    """Cancel an active preparation — turn A/C + seats + steering + mirror OFF (several commands)."""
-    import asyncio
-    t = i18n.get_t(db_reader.get_language())
-    ok, msg = await asyncio.get_event_loop().run_in_executor(None, command_client.prepare_car_off)
-    if ok:
-        return HTMLResponse(f'<span style="color:#22c55e">✓ {t("prep_off_done")}</span>')
-    return HTMLResponse(_cmd_error_html(msg))
-
-
-@app.post("/api/prepare-car/ready-automation", response_class=HTMLResponse)
-async def save_ready_automation_api(request: Request):
-    """Save the Ready-triggered automation config — read by the POLLER every poll (not by this
-    process); nothing is actuated here, this only persists settings."""
-    form = await request.form()
-    db_reader.save_ready_automation_config(form)
-    t = i18n.get_t(db_reader.get_language())
-    return HTMLResponse(f'<span style="color:#22c55e">✓ {t("ready_saved")}</span>')
-
-
 _OPTIMISTIC = {
     "lock":          {"is_locked": 1},
     "unlock":        {"is_locked": 0},
@@ -6856,46 +5895,13 @@ async def run_command(name: str, request: Request, background_tasks: BackgroundT
                          html=_cmd_error_html(msg))
 
 
-# ── Battery options — European models only (verified specs) ──────────────────
-# The packs themselves live in battery_packs.py — a plain table, importable without fastapi,
-# so the minimal CI environment can protect the figures (see
-# tests/test_the_wizard_hint_matches_the_packs_mate_uses.py).
-_EU_BATTERY_MAP = battery_packs.EU_BATTERY_MAP
-
-
-def battery_options_for_build() -> dict[str, list[dict]]:
-    """The wizard's battery list — every pack, range-extenders included, since 4.7.0.
-
-    ⛔ This used to hide the REEV packs on the official build, because the official Mate had no REEV
-    support: its energy pipeline assumes SoC-down = energy-used, which a generator refilling the pack
-    mid-drive breaks. It has that support now, so hiding the pack no longer protects anybody — it
-    stops a range-extender owner from finishing the wizard at all, which is a worse silence than the
-    one the filter was written to prevent.
-
-    🔑 Why this function still exists rather than reading the map directly: the wizard page and the
-    detect-vehicle endpoint both render from it. They used to keep separate copies, which is exactly
-    how the REEV packs stayed in the official wizard for ten days after the gate that was supposed to
-    remove them (#141) — and a single source of truth is worth keeping whichever way the answer goes.
-    """
-    return _EU_BATTERY_MAP
-
-
 # ── Setup wizard ─────────────────────────────────────────────────────────────
 
 @app.get("/setup", response_class=HTMLResponse)
 async def setup_page(request: Request):
-    # The international wizard renders every pack provided by the server, including REEV.
-    from api_backend import is_china
-    if is_china():
-        from cn_language import setup_context
-        return templates.TemplateResponse(request, "setup_cn.html", setup_context(request.query_params.get('language')))
-    return templates.TemplateResponse(request, "setup.html", {
-        "battery_options": battery_options_for_build(),
-        # Asked here, pre-filled with what Mate detected — see the note in setup_submit. The full
-        # grouped list is the same one Settings uses, so the two pickers can never diverge.
-        "tz_options": db_reader.timezone_options(),
-        "tz_detected": db_reader.detected_tz_name(),
-    })
+    from cn_language import setup_context
+    return templates.TemplateResponse(
+        request, "setup_cn.html", setup_context(request.query_params.get("language")))
 
 
 def _restart_container() -> None:
@@ -6933,23 +5939,6 @@ async def demo_status():
     container has come back in the target mode — robust regardless of how fast the restart is
     (polling for an up/down transition can miss a sub-second restart)."""
     return JSONResponse({"demo": _IS_DEMO})
-
-
-@app.post("/api/setup/application-bundle")
-async def setup_application_bundle(request: Request):
-    from application_bundle import install_bundle, MAX_BYTES
-    form = await request.form()
-    upload = form.get("bundle")
-    if upload is None or not hasattr(upload, "read"):
-        return JSONResponse({"error": "Application bundle required"}, status_code=400)
-    payload = await upload.read(MAX_BYTES + 1)
-    try:
-        from runtime_paths import paths
-        result = await run_in_threadpool(install_bundle, payload, paths().data)
-    except Exception:
-        return JSONResponse({"error": "Invalid application bundle; existing material preserved"}, status_code=400)
-    command_client._session._reset()
-    return JSONResponse({"ok": True, "state": result["state"]})
 
 
 @app.post("/api/setup/sms/send")
@@ -6994,12 +5983,12 @@ async def cn_setup_submit(request: Request):
         cars = json.loads(form.get("vehicles_json") or "[]")
         expected = {car["vin"].lower(): car for car in staged.get("vehicles", [])}
         if not cars or len(cars) != len(expected) or {car["vin"].lower() for car in cars} != set(expected):
-            raise ValueError("車輛清單與登入流程不一致")
+            raise ValueError("车辆清单与登录流程不一致")
         for car in cars:
             capacity = float(car.get("battery", 0))
-            if not math.isfinite(capacity) or not 1 <= capacity <= 250: raise ValueError("請確認每台車的電池可用容量")
+            if not math.isfinite(capacity) or not 1 <= capacity <= 250: raise ValueError("请确认每台车的电池可用容量")
             pin = str(car.get("pin") or "")
-            if pin and not re.fullmatch(r"[0-9]{4,8}", pin): raise ValueError("操作 PIN 必須為 4 至 8 位數字")
+            if pin and not re.fullmatch(r"[0-9]{4,8}", pin): raise ValueError("操作 PIN 必须为 4 至 8 位数字")
             car["car_type"] = expected[car["vin"].lower()]["car_type"]
         await asyncio.to_thread(ChinaAPIClient.complete_setup, login_id)
         apply_setup_vehicles(cars)
@@ -7033,42 +6022,82 @@ async def cn_daily_energy(start: str = "", end: str = ""):
         return JSONResponse({"error": localize_error(error) if isinstance(error, ChinaError) else i18n.get_t(db_reader.get_language())('cn_invalid_date')}, status_code=400)
 
 
-@app.get("/api/setup/cert-status")
-async def cert_status_api():
-    """Whether the application material is in place, so the wizard can go to the account step.
-
-    It is installed at startup from the build itself; the user is never asked for a certificate."""
-    from api_backend import is_china
-    if is_china():
-        return JSONResponse({"state": "ready", "market": "CN", "manual_upload_required": False})
-    from setup_readiness import readiness
-    from runtime_paths import paths
-    return JSONResponse(readiness(command_client.cert_dir(), parameters_directory=paths().data / 'api-v2-private'))
+_cn_charge_stats_cache: dict = {}
+_cn_charge_details_cache: dict = {}
 
 
-@app.post("/api/setup/detect-vehicle")
-async def detect_vehicle_api(request: Request):
+@app.get("/api/cn/charges/statistics")
+async def cn_charge_statistics(mode: str = "7d", month: str = "", year: str = "", refresh: int = 0):
     import asyncio
-    body = await request.json()
-    user = (body.get("user") or "").strip()
-    pwd  = (body.get("password") or "").strip()
-    pin  = (body.get("pin") or "").strip()
-    if not user or not pwd or not pin:
-        return JSONResponse({"error": "Missing credentials"}, status_code=400)
-    result = await asyncio.get_event_loop().run_in_executor(
-        None, lambda: command_client.detect_vehicle(user, pwd, pin)
-    )
-    if "error" in result:
-        return JSONResponse(result, status_code=400)
-    options = battery_options_for_build().get(result["car_type"], [])
-    if len(options) == 1:
-        # Single EU variant — tell the frontend to auto-set, no selector needed
-        result["battery_kwh"]   = options[0]["v"]
-        result["battery_label"] = options[0]["label"]
-    elif options:
-        result["battery_options"] = options
-    # else: unknown/non-EU model → frontend falls back to manual input
-    return JSONResponse(result)
+    import time
+    from api_backend import is_china
+    from cn_backend import ChinaError
+    if _IS_DEMO or not is_china():
+        return JSONResponse({"error": "Unavailable"}, status_code=400)
+    key = (mode or "7d", month or "", year or "")
+    slot = _car_slot(_cn_charge_stats_cache)
+    cached = slot.get(key)
+    if not refresh and cached and time.time() - cached["ts"] < 300:
+        return JSONResponse(cached["data"])
+    try:
+        data = await asyncio.to_thread(command_client.get_cn_charge_statistics, mode, month, year)
+        slot[key] = {"data": data, "ts": time.time()}
+        return JSONResponse(data)
+    except (ChinaError, ValueError) as error:
+        from cn_language import localize_error
+        msg = localize_error(error) if isinstance(error, ChinaError) else i18n.get_t(db_reader.get_language())("cn_invalid_date")
+        return JSONResponse({"error": msg}, status_code=400)
+
+
+@app.get("/api/cn/charges/details")
+async def cn_charge_details(date: str = "", month: str = "", refresh: int = 0):
+    import asyncio
+    import time
+    from api_backend import is_china
+    from cn_backend import ChinaError
+    if _IS_DEMO or not is_china():
+        return JSONResponse({"error": "Unavailable"}, status_code=400)
+    key = (date or "", month or "")
+    slot = _car_slot(_cn_charge_details_cache)
+    cached = slot.get(key)
+    if not refresh and cached and time.time() - cached["ts"] < 300:
+        return JSONResponse(cached["data"])
+    try:
+        data = await asyncio.to_thread(command_client.get_cn_charge_details, date, month)
+        slot[key] = {"data": data, "ts": time.time()}
+        return JSONResponse(data)
+    except (ChinaError, ValueError) as error:
+        from cn_language import localize_error
+        msg = localize_error(error) if isinstance(error, ChinaError) else i18n.get_t(db_reader.get_language())("cn_invalid_date")
+        return JSONResponse({"error": msg}, status_code=400)
+
+
+@app.post("/api/cn/charges/sync")
+async def cn_charge_sync():
+    from api_backend import is_china
+    from cn_backend import ChinaError
+    from cn_language import localize_error
+    import history_worker
+    if _IS_DEMO or not is_china():
+        return JSONResponse({"error": "Unavailable"}, status_code=400)
+    try:
+        summary = await run_in_threadpool(history_worker.sync_once) or {}
+    except ChinaError as error:
+        return JSONResponse({"error": localize_error(error)}, status_code=400)
+    if summary.get("state") == "auth_required":
+        return JSONResponse({"error": localize_error("請在設定頁以短信驗證碼登入中國區帳號")}, status_code=401)
+    _car_slot(_cn_charge_stats_cache).clear()
+    _car_slot(_cn_charge_details_cache).clear()
+    imported = summary.get("charge_import") or {}
+    return JSONResponse({
+        "ok": True,
+        "state": summary.get("state", "ok"),
+        "fetched": summary.get("charge", 0),
+        "inserted": imported.get("inserted", 0),
+        "unchanged": imported.get("unchanged", 0),
+        "overlapping": imported.get("overlapping", 0),
+        "at": summary.get("at"),
+    })
 
 
 def apply_setup_vehicles(cars: list[dict]) -> int:
@@ -7110,78 +6139,7 @@ def apply_setup_vehicles(cars: list[dict]) -> int:
 
 @app.post("/setup", response_class=HTMLResponse)
 async def setup_submit(request: Request):
-    from api_backend import is_china
-    if is_china():
-        return await cn_setup_submit(request)
-    form = await request.form()
-    user     = (form.get("user", "") or "").strip()
-    pwd      = (form.get("password", "") or "").strip()
-    pin      = (form.get("pin", "") or "").strip()
-    battery  = (form.get("battery", "65.0") or "65.0").strip()
-    lang     = form.get("language", "en")
-    car_type = (form.get("car_type", "") or "").strip().upper()
-    is_reev  = "1" if form.get("is_reev") in ("1", "on", "true") else "0"
-    vin      = (form.get("vin", "") or "").strip()
-    # The zone is asked here, pre-filled with the one detected, because leaving it implicit is what
-    # cost @ghuaywen-ai 150 charges seven hours out (#181): a time you type is anchored to whatever
-    # clock Mate happens to be running on, and on a bare container that is UTC. On Home Assistant
-    # the detected value is already right and this is one more Next; on plain Docker the field reads
-    # "UTC" and says so, which is the whole point of showing it.
-    tz       = (form.get("timezone", "") or "").strip()
-
-    if not user or not pwd or not pin:
-        t = i18n.get_t(lang)
-        _req_errors = {
-            "it": "Email, password e PIN sono obbligatori.",
-            "fr": "E-mail, mot de passe et PIN sont obligatoires.",
-            "de": "E-Mail, Passwort und PIN sind erforderlich.",
-        }
-        return templates.TemplateResponse(request, "setup.html", {
-            "error": _req_errors.get(lang, "Email, password and PIN are required."),
-            "prefill": dict(form),
-        }, status_code=400)
-
-    try:
-        battery_kwh = float(battery)
-    except ValueError:
-        battery_kwh = 65.0
-
-    db_reader.set_setting("leapmotor_user", user)
-    db_reader.set_secret("leapmotor_pass", pwd)
-    db_reader.set_setting("battery_capacity_kwh", str(battery_kwh))
-    db_reader.set_setting("is_reev", is_reev)   # REEV variant selected in the wizard → gates fuel features
-    db_reader.set_setting("language", lang if lang in ("en", "it", "fr", "de", "pl", "pt-PT", "nl", "es", "cs", "zh-TW", "zh-CN") else "en")
-    # set_timezone validates against the tz database and falls back to Auto on anything unknown, so
-    # a tampered field cannot wedge every date render. Marked as pinned either way, so the startup
-    # migration never comes back and overwrites a fresh answer with the container's clock.
-    db_reader.set_timezone(tz or db_reader.detected_tz_name())
-    db_reader.set_setting(db_reader.TZ_PINNED_KEY, "1")
-
-    # Every car the wizard found, each with its OWN pack, range-extender answer and PIN (the PIN is
-    # set on the car, so it is only ever stored per car). The account-wide pack and range-extender
-    # values written above stay for the single-car install and as the fallback the rest of the code
-    # already knows; before this, car number two was left to the poller and took its model's default.
-    try:
-        _cars = json.loads(form.get("vehicles_json") or "[]")
-    except (TypeError, ValueError):
-        _cars = []
-    if not _cars and vin and car_type:      # one car, or a client that posts the old shape
-        _cars = [{"vin": vin, "car_type": car_type, "battery": str(battery_kwh),
-                  "is_reev": is_reev, "pin": pin}]
-    apply_setup_vehicles(_cars)
-    # Only the cars found take a PIN (with none, the page has said to set it in Settings → Vehicle),
-    # and an older install-wide PIN must never come back to a car after this.
-    db_reader.set_secret("leapmotor_pin", "")
-
-    # Completing setup cancels any pending factory reset: the user has intentionally configured
-    # this install, so a stray marker (e.g. if a reset's relaunch never fired) must never wipe it.
-    db_reader.set_setting("factory_reset_pending", "0")
-    db_reader.set_setting("setup_complete", "1")
-
-    # Reset the command session so it picks up new credentials
-    command_client._session._reset()
-
-    return RedirectResponse(request.headers.get("x-ingress-path", "") + "/", status_code=303)
+    return await cn_setup_submit(request)
 
 
 def _web_listen_host() -> str:

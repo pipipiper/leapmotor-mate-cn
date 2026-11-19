@@ -72,10 +72,10 @@ def test_projection_styles_click_inverse_and_fallback_in_browser(width,tmp_path)
         assert result['source']=='GCJ02' and result['zoom']==18
         assert not result['overflow']
         assert any('webrd0' in url and 'style=8' in url for url in requests)
-        page.locator('select[aria-label="地圖底圖"]').select_option('satellite')
+        page.locator('select[aria-label="地图底图"]').select_option('satellite')
         assert page.evaluate('map._mateTiles.layer._url').startswith('https://webst0')
         assert page.evaluate('localStorage.getItem("mate.map.style")')=='satellite'
-        page.locator('select[aria-label="地圖底圖"]').select_option('dark')
+        page.locator('select[aria-label="地图底图"]').select_option('dark')
         assert page.locator('.mate-map-dark').count()==1
         # A failing provider switches EVERY layer to the WGS84 OSM grid.
         page.evaluate('map._mateTiles.layer.fire("tileerror");map._mateTiles.layer.fire("tileerror");map._mateTiles.layer.fire("tileerror")')

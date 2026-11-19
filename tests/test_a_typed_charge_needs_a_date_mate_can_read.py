@@ -50,26 +50,29 @@ def _charges(path):
 _FORM = {"time": "11:35", "energy": "19.81", "cost": "12.09", "charge_type": "DC"}
 
 
-def test_a_charge_typed_with_a_year_mate_cannot_read_is_refused(mate):
+def test_the_removed_manual_charge_add_endpoint_returns_404(mate):
     path, client = mate
-    r = client.post("/api/charges/manual", data={**_FORM, "date": "72026-03-20"})
-    assert r.status_code == 400
+    r = client.post("/api/charges/manual", data={**_FORM, "date": "2026-03-20"})
+    assert r.status_code in (404, 405)
     assert _charges(path) == []
 
 
-def test_a_charge_typed_with_a_date_mate_can_read_is_added(mate):
+def test_an_edit_to_a_valid_date_is_saved(mate):
     path, client = mate
-    r = client.post("/api/charges/manual", data={**_FORM, "date": "2026-03-20"})
+    cid = db_reader.add_manual_charge("2026-03-19T11:35:00+00:00", 19.81, cost=12.09, charge_type="DC")
+    r = client.post(f"/api/charges/{cid}/edit", data={**_FORM, "date": "2026-03-20"})
     assert r.status_code == 200
     assert [c["started_at"] for c in _charges(path)] == ["2026-03-20T11:35:00+00:00"]
 
 
 def test_an_end_mate_cannot_read_is_refused(mate):
     path, client = mate
-    r = client.post("/api/charges/manual", data={**_FORM, "date": "2026-03-20",
-                                                 "end_date": "72026-03-20", "end_time": "13:00"})
+    cid = db_reader.add_manual_charge("2026-03-20T11:35:00+00:00", 19.81, cost=12.09, charge_type="DC")
+    before = _charges(path)
+    r = client.post(f"/api/charges/{cid}/edit", data={**_FORM, "date": "2026-03-20",
+                                                      "end_date": "72026-03-20", "end_time": "13:00"})
     assert r.status_code == 400
-    assert _charges(path) == []
+    assert _charges(path) == before
 
 
 def test_an_edit_to_a_date_mate_cannot_read_is_refused_and_leaves_the_charge_as_it_was(mate):

@@ -39,7 +39,7 @@ def _street_matches(input_address: str, result_street: str) -> bool:
     geocoded street, so 'Via Torino' doesn't match 'Via Torre'."""
     if not result_street:
         return False
-    words = [w for w in re.findall(r"[a-zàèéìòùü]+", input_address.lower())
+    words = [w for w in re.findall(r"[a-zàèéìòùü\u4e00-\u9fff]+", input_address.lower())
              if w not in _SKIP_WORDS and len(w) > 3]
     if not words:
         return True
@@ -51,7 +51,7 @@ def _street_matches(input_address: str, result_street: str) -> bool:
 
 def _geoapify_geocode(query: str, key: str) -> dict | None:
     url = (f"https://api.geoapify.com/v1/geocode/search"
-           f"?text={urllib.parse.quote(query)}&limit=5&apiKey={urllib.parse.quote(key)}")
+           f"?text={urllib.parse.quote(query)}&limit=5&lang=zh&apiKey={urllib.parse.quote(key)}")
     feats = _get(url).get("features", [])
     if not feats:
         return None
@@ -61,7 +61,8 @@ def _geoapify_geocode(query: str, key: str) -> dict | None:
 
 def _locationiq_geocode(query: str, key: str) -> dict | None:
     url = (f"https://us1.locationiq.com/v1/search"
-           f"?key={urllib.parse.quote(key)}&q={urllib.parse.quote(query)}&format=json&limit=5")
+           f"?key={urllib.parse.quote(key)}&q={urllib.parse.quote(query)}&format=json&limit=5"
+           f"&accept-language=zh-CN")
     arr = _get(url)
     if not arr:
         return None
@@ -71,7 +72,7 @@ def _locationiq_geocode(query: str, key: str) -> dict | None:
 
 def _tomtom_geocode(query: str, key: str) -> dict | None:
     url = (f"https://api.tomtom.com/search/2/geocode/{urllib.parse.quote(query)}.json"
-           f"?key={urllib.parse.quote(key)}&limit=5")
+           f"?key={urllib.parse.quote(key)}&limit=5&language=zh-CN")
     results = _get(url).get("results", [])
     if not results:
         return None
@@ -120,7 +121,7 @@ def _osm_place(data: dict) -> dict | None:
 
 def _geoapify_reverse(lat, lon, key) -> dict | None:
     url = (f"https://api.geoapify.com/v1/geocode/reverse"
-           f"?lat={lat}&lon={lon}&apiKey={urllib.parse.quote(key)}")
+           f"?lat={lat}&lon={lon}&lang=zh&apiKey={urllib.parse.quote(key)}")
     feats = _get(url).get("features", [])
     if not feats:
         return None
@@ -135,7 +136,8 @@ def _geoapify_reverse(lat, lon, key) -> dict | None:
 
 def _locationiq_reverse(lat, lon, key) -> dict | None:
     url = (f"https://us1.locationiq.com/v1/reverse"
-           f"?key={urllib.parse.quote(key)}&lat={lat}&lon={lon}&format=json&addressdetails=1")
+           f"?key={urllib.parse.quote(key)}&lat={lat}&lon={lon}&format=json&addressdetails=1"
+           f"&accept-language=zh-CN")
     try:
         return _osm_place(_get(url))
     except urllib.error.HTTPError as e:
@@ -146,7 +148,7 @@ def _locationiq_reverse(lat, lon, key) -> dict | None:
 
 def _tomtom_reverse(lat, lon, key) -> dict | None:
     url = (f"https://api.tomtom.com/search/2/reverseGeocode/{lat},{lon}.json"
-           f"?key={urllib.parse.quote(key)}")
+           f"?key={urllib.parse.quote(key)}&language=zh-CN")
     addrs = _get(url).get("addresses", [])
     if not addrs:
         return None
@@ -166,7 +168,7 @@ def _photon_geocode(address: str, city: str) -> dict | None:
     """Keyless forward-geocode via Photon (OSM). Ranks candidates and returns the
     best guess (confirmed by the user on the map before sending)."""
     query = " ".join(p for p in (address, city) if p)
-    url = f"https://photon.komoot.io/api/?q={urllib.parse.quote_plus(query)}&limit=5"
+    url = f"https://photon.komoot.io/api/?q={urllib.parse.quote_plus(query)}&limit=5&lang=zh"
     features = _get(url).get("features", [])
     if not features:
         return None
@@ -195,7 +197,7 @@ def _photon_geocode(address: str, city: str) -> dict | None:
 
 def _nominatim_reverse(lat, lon) -> dict | None:
     url = (f"https://nominatim.openstreetmap.org/reverse?format=jsonv2"
-           f"&lat={lat}&lon={lon}&zoom=18&addressdetails=1")
+           f"&lat={lat}&lon={lon}&zoom=18&addressdetails=1&accept-language=zh-CN")
     return _osm_place(_get(url))
 
 

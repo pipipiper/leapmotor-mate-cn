@@ -232,17 +232,45 @@ _TZ_REGIONS = ("Africa", "America", "Antarctica", "Arctic", "Asia",
 def timezone_options() -> dict:
     """Canonical IANA zones grouped by continent for the Settings <select>, as
     {region: [(value, label), …]} sorted by label, plus a standalone 'UTC' group. Legacy aliases
-    and the sign-inverted Etc/GMT±N zones are excluded (see _TZ_REGIONS) so the picker can't mislead."""
+    and the sign-inverted Etc/GMT±N zones are excluded (see _TZ_REGIONS) so the picker can't mislead.
+
+    China is the first group and its cities carry Chinese labels, matching the China-only build.
+    The other canonical regions stay available so a travelling owner can still pick a local clock.
+    """
+    china = [
+        ("Asia/Shanghai", "中国标准时间（上海）"),
+        ("Asia/Urumqi", "新疆时间（乌鲁木齐）"),
+        ("Asia/Hong_Kong", "香港时间"),
+        ("Asia/Macau", "澳门时间"),
+        ("Asia/Taipei", "台北时间"),
+    ]
     groups: dict = {}
     for z in available_timezones():
         region, _, rest = z.partition("/")
         if region not in _TZ_REGIONS:
             continue
         label = rest.replace("_", " ").replace("/", " / ")
+        if z in {value for value, _ in china}:
+            continue
         groups.setdefault(region, []).append((z, label))
-    out = {k: sorted(groups[k], key=lambda t: t[1]) for k in sorted(groups)}
+    out = {"中国": china}
+    for k in sorted(groups):
+        out[k] = sorted(groups[k], key=lambda t: t[1])
     out["UTC"] = [("UTC", "UTC")]     # universal, unambiguous fallback for anyone who wants it
     return out
+
+
+_TZ_REGION_NAMES = {
+    "中国": "中国", "Asia": "亚洲", "Europe": "欧洲", "Africa": "非洲",
+    "America": "美洲", "Antarctica": "南极洲", "Arctic": "北极地区",
+    "Atlantic": "大西洋", "Australia": "澳大利亚", "Indian": "印度洋",
+    "Pacific": "太平洋", "UTC": "协调世界时",
+}
+
+
+def timezone_region_label(region: str) -> str:
+    """Chinese label for a timezone group, with the canonical IANA name as a safe fallback."""
+    return _TZ_REGION_NAMES.get(region, region)
 
 
 def _local_iso(s, tz=None):
@@ -1038,15 +1066,6 @@ def _conn_rw() -> sqlite3.Connection:
     return conn
 
 
-# How close a CSV line has to be to a charge already in the database to be the SAME session rather
-# than a new one (#237, `import_charge_row`). A file that came out of Mate's own export matches to
-# the microsecond; one typed by hand from a receipt does not, and a minute is well inside the gap
-# between two real charging sessions. The energy has to agree too — either test alone is a
-# coincidence waiting to happen, both together are not.
-_IMPORT_MATCH_DAYS = 60.0 / 86400.0      # one minute, in the days julianday() speaks
-_IMPORT_MATCH_KWH = 0.05
-
-
 def get_setting(key: str, default: str = "") -> str:
     if key == ACTIVE_VEHICLE_SETTING and getattr(_read_vehicle_scope, "vehicle_id", None) is not None:
         # Cloud reads resolve their target through this setting, too. Only the export
@@ -1456,35 +1475,6 @@ def restore_database(blob: bytes) -> dict:
     return {"counts": counts, "secrets_preserved": len(fresh)}
 
 
-def abrp_cars_without_token() -> list[str]:
-    """Cars that would send NOTHING to ABRP — the ones with no token of their own, once there is
-    more than one car. With a single car the install-wide token still covers it, so the list is
-    empty and nothing is claimed. Shown in Settings because otherwise the silence is invisible:
-    the second car simply never appears on ABRP and nobody says why."""
-    vehicles = get_vehicles()
-    if len(vehicles) < 2:
-        return []
-    out = []
-    for v in vehicles:
-        vin = (v.get("vin") or "")
-        if not get_secret(f"abrp_token_{vin.lower()}", ""):
-            out.append(v.get("car_type") or vin[-6:])
-    return out
-
-
-def abrp_token_in_use() -> bool:
-    """Whether ABRP would actually send anything, which is not the same as "a token exists".
-
-    Mirrors the poller's rule in `Database.get_abrp_token`: a per-car token counts always, the
-    install-wide one only while there is a single car. With two cars and nothing but the shared
-    token the poller sends NOTHING — so a status dot reading that key alone would report "active"
-    over silence, which is the kind of green light that costs an afternoon to disbelieve."""
-    vehicles = get_vehicles()
-    if any(get_secret(f"abrp_token_{(v.get('vin') or '').lower()}", "") for v in vehicles):
-        return True
-    return len(vehicles) <= 1 and bool(get_secret("abrp_token", ""))
-
-
 def get_secret(key: str, default: str = "") -> str:
     """Read a secret setting, decrypting transparently (plaintext passes through)."""
     return crypto.decrypt(get_setting(key, default))
@@ -1565,10 +1555,9 @@ def per_car_pin_keys() -> list:
         return []
 
 
-# The secrets kept encrypted at rest. Mirrors poller/db.py's SECRET_KEYS — the same eight settings
-# seen from the other process.
-SECRET_KEYS = ("leapmotor_pass", "leapmotor_pin", "abrp_token", "mqtt_pass",
-               "geocoder_key", "ha_token", "ocm_key", "tomtom_key", "cn_shared_session")
+# The secrets kept encrypted at rest. Mirrors poller/db.py's SECRET_KEYS.
+SECRET_KEYS = ("leapmotor_pass", "leapmotor_pin", "mqtt_pass",
+               "geocoder_key", "ha_token", "cn_shared_session")
 
 
 _decryption_reported = False
@@ -1661,42 +1650,44 @@ def range_at_charge_target(range_km, soc, charge_limit):
 
 # ── Currency ──────────────────────────────────────────────────────────────────
 # Monetary amounts are formatted via the Jinja `money` filter using this table.
-# Stored setting `currency` holds the ISO 4217 code; default EUR keeps the old
-# behaviour. `pos` = symbol placement, `dec` = decimal digits. Names stay in
-# English (international convention) so they need no translation.
+# Stored setting `currency` holds the ISO 4217 code; CNY is the default for the China build.
+# `pos` = symbol placement, `dec` = decimal digits. `name` stays English for API/tests, while
+# `name_zh` is what the Simplified/Traditional Chinese UI shows.
 CURRENCIES = {
-    "EUR": {"name": "Euro",            "symbol": "€",   "pos": "after",  "dec": 2},
-    "USD": {"name": "US Dollar",       "symbol": "$",   "pos": "before", "dec": 2},
-    "GBP": {"name": "British Pound",   "symbol": "£",   "pos": "before", "dec": 2},
-    "CHF": {"name": "Swiss Franc",     "symbol": "CHF", "pos": "before", "dec": 2},
-    "SEK": {"name": "Swedish Krona",   "symbol": "kr",  "pos": "after",  "dec": 2},
-    "NOK": {"name": "Norwegian Krone", "symbol": "kr",  "pos": "after",  "dec": 2},
-    "DKK": {"name": "Danish Krone",    "symbol": "kr",  "pos": "after",  "dec": 2},
-    "ISK": {"name": "Icelandic Króna", "symbol": "kr.", "pos": "after",  "dec": 0},
-    "PLN": {"name": "Polish Złoty",    "symbol": "zł",  "pos": "after",  "dec": 2},
-    "CZK": {"name": "Czech Koruna",    "symbol": "Kč",  "pos": "after",  "dec": 2},
-    "HUF": {"name": "Hungarian Forint","symbol": "Ft",  "pos": "after",  "dec": 0},
-    "RON": {"name": "Romanian Leu",    "symbol": "lei", "pos": "after",  "dec": 2},
-    "BGN": {"name": "Bulgarian Lev",   "symbol": "лв",  "pos": "after",  "dec": 2},
-    "HRK": {"name": "Croatian Kuna",   "symbol": "kn",  "pos": "after",  "dec": 2},
-    "TRY": {"name": "Turkish Lira",    "symbol": "₺",   "pos": "before", "dec": 2},
-    "CAD": {"name": "Canadian Dollar", "symbol": "$",   "pos": "before", "dec": 2},
-    "AUD": {"name": "Australian Dollar","symbol": "$",  "pos": "before", "dec": 2},
-    "NZD": {"name": "New Zealand Dollar","symbol": "$", "pos": "before", "dec": 2},
-    "JPY": {"name": "Japanese Yen",    "symbol": "¥",   "pos": "before", "dec": 0},
-    "CNY": {"name": "Chinese Yuan",    "symbol": "¥",   "pos": "before", "dec": 2},
-    "INR": {"name": "Indian Rupee",    "symbol": "₹",   "pos": "before", "dec": 2},
-    "BRL": {"name": "Brazilian Real",  "symbol": "R$",  "pos": "before", "dec": 2},
-    "MXN": {"name": "Mexican Peso",    "symbol": "$",   "pos": "before", "dec": 2},
-    "ZAR": {"name": "South African Rand","symbol": "R", "pos": "before", "dec": 2},
-    "RUB": {"name": "Russian Ruble",   "symbol": "₽",   "pos": "after",  "dec": 2},
-    "UAH": {"name": "Ukrainian Hryvnia","symbol": "₴",  "pos": "after",  "dec": 2},
-    "ILS": {"name": "Israeli Shekel",  "symbol": "₪",   "pos": "before", "dec": 2},
-    "KRW": {"name": "South Korean Won","symbol": "₩",   "pos": "before", "dec": 0},
-    "SGD": {"name": "Singapore Dollar","symbol": "$",   "pos": "before", "dec": 2},
-    "HKD": {"name": "Hong Kong Dollar","symbol": "$",   "pos": "before", "dec": 2},
-    "THB": {"name": "Thai Baht",       "symbol": "฿",   "pos": "before", "dec": 2},
-    "MYR": {"name": "Malaysian Ringgit","symbol": "RM", "pos": "before", "dec": 2},
+    "CNY": {"name": "Chinese Yuan",       "name_zh": "人民币",         "symbol": "¥",   "pos": "before", "dec": 2},
+    "HKD": {"name": "Hong Kong Dollar",   "name_zh": "港币",           "symbol": "HK$", "pos": "before", "dec": 2},
+    "MOP": {"name": "Macanese Pataca",    "name_zh": "澳门元",         "symbol": "MOP$","pos": "before", "dec": 2},
+    "TWD": {"name": "New Taiwan Dollar",  "name_zh": "新台币",         "symbol": "NT$", "pos": "before", "dec": 2},
+    "USD": {"name": "US Dollar",          "name_zh": "美元",           "symbol": "$",   "pos": "before", "dec": 2},
+    "EUR": {"name": "Euro",               "name_zh": "欧元",           "symbol": "€",   "pos": "after",  "dec": 2},
+    "GBP": {"name": "British Pound",      "name_zh": "英镑",           "symbol": "£",   "pos": "before", "dec": 2},
+    "JPY": {"name": "Japanese Yen",       "name_zh": "日元",           "symbol": "¥",   "pos": "before", "dec": 0},
+    "KRW": {"name": "South Korean Won",   "name_zh": "韩元",           "symbol": "₩",   "pos": "before", "dec": 0},
+    "SGD": {"name": "Singapore Dollar",   "name_zh": "新加坡元",       "symbol": "S$",  "pos": "before", "dec": 2},
+    "THB": {"name": "Thai Baht",          "name_zh": "泰铢",           "symbol": "฿",   "pos": "before", "dec": 2},
+    "MYR": {"name": "Malaysian Ringgit",  "name_zh": "马来西亚林吉特", "symbol": "RM",  "pos": "before", "dec": 2},
+    "CHF": {"name": "Swiss Franc",        "name_zh": "瑞士法郎",       "symbol": "CHF", "pos": "before", "dec": 2},
+    "SEK": {"name": "Swedish Krona",      "name_zh": "瑞典克朗",       "symbol": "kr",  "pos": "after",  "dec": 2},
+    "NOK": {"name": "Norwegian Krone",    "name_zh": "挪威克朗",       "symbol": "kr",  "pos": "after",  "dec": 2},
+    "DKK": {"name": "Danish Krone",       "name_zh": "丹麦克朗",       "symbol": "kr",  "pos": "after",  "dec": 2},
+    "ISK": {"name": "Icelandic Króna",    "name_zh": "冰岛克朗",       "symbol": "kr.", "pos": "after",  "dec": 0},
+    "PLN": {"name": "Polish Złoty",       "name_zh": "波兰兹罗提",     "symbol": "zł",  "pos": "after",  "dec": 2},
+    "CZK": {"name": "Czech Koruna",       "name_zh": "捷克克朗",       "symbol": "Kč",  "pos": "after",  "dec": 2},
+    "HUF": {"name": "Hungarian Forint",   "name_zh": "匈牙利福林",     "symbol": "Ft",  "pos": "after",  "dec": 0},
+    "RON": {"name": "Romanian Leu",       "name_zh": "罗马尼亚列伊",   "symbol": "lei", "pos": "after",  "dec": 2},
+    "BGN": {"name": "Bulgarian Lev",      "name_zh": "保加利亚列弗",   "symbol": "лв",  "pos": "after",  "dec": 2},
+    "HRK": {"name": "Croatian Kuna",      "name_zh": "克罗地亚库纳",   "symbol": "kn",  "pos": "after",  "dec": 2},
+    "TRY": {"name": "Turkish Lira",       "name_zh": "土耳其里拉",     "symbol": "₺",   "pos": "before", "dec": 2},
+    "CAD": {"name": "Canadian Dollar",    "name_zh": "加拿大元",       "symbol": "C$",  "pos": "before", "dec": 2},
+    "AUD": {"name": "Australian Dollar",  "name_zh": "澳大利亚元",     "symbol": "A$",  "pos": "before", "dec": 2},
+    "NZD": {"name": "New Zealand Dollar", "name_zh": "新西兰元",       "symbol": "NZ$", "pos": "before", "dec": 2},
+    "INR": {"name": "Indian Rupee",       "name_zh": "印度卢比",       "symbol": "₹",   "pos": "before", "dec": 2},
+    "BRL": {"name": "Brazilian Real",     "name_zh": "巴西雷亚尔",     "symbol": "R$",  "pos": "before", "dec": 2},
+    "MXN": {"name": "Mexican Peso",       "name_zh": "墨西哥比索",     "symbol": "MX$", "pos": "before", "dec": 2},
+    "ZAR": {"name": "South African Rand", "name_zh": "南非兰特",       "symbol": "R",   "pos": "before", "dec": 2},
+    "RUB": {"name": "Russian Ruble",      "name_zh": "俄罗斯卢布",     "symbol": "₽",   "pos": "after",  "dec": 2},
+    "UAH": {"name": "Ukrainian Hryvnia",  "name_zh": "乌克兰格里夫纳", "symbol": "₴",   "pos": "after",  "dec": 2},
+    "ILS": {"name": "Israeli Shekel",     "name_zh": "以色列新谢克尔", "symbol": "₪",   "pos": "before", "dec": 2},
 }
 _DEFAULT_CURRENCY = "CNY" if os.environ.get("MATE_MARKET", "CN").upper() == "CN" else "EUR"
 
@@ -1901,23 +1892,6 @@ def save_custom_kwh_entity_for(ctype: str, entity_id: str) -> None:
     set_setting("custom_kwh_entities", json.dumps(m))
 
 
-# ── Ready-triggered "prepare now" automation (design agreed 2026-07-02) ────────
-# One JSON setting, read every poll by poller/ready_automation.py (which re-sanitises
-# independently — defense in depth, same pattern already used for the per-type pricing
-# modes: a write-time and a read-time guard, neither trusting the other alone).
-_READY_PRESETS    = {"cool", "heat", "vent", "defrost", "none"}
-_READY_SEAT_MODES = {"off", "heat", "vent"}
-
-
-def ready_automation_key(vin: str = "") -> str:
-    """Where THIS car's ready-automation config lives. Same shape as the ABRP token: per-VIN, with
-    the install-wide key still covering a single-car install and covering NOBODY once there are two
-    — turning on the climate of one car on another car's orders is not a fallback, it is the wrong
-    car acting."""
-    v = (vin or _selected_vin() or "").lower()
-    return f"ready_automation_{v}" if v else "ready_automation"
-
-
 def _selected_vin() -> str:
     try:
         row = _get().execute("SELECT vin FROM vehicles WHERE id = COALESCE(?, id) ORDER BY id "
@@ -1925,105 +1899,6 @@ def _selected_vin() -> str:
     except sqlite3.Error:
         return ""
     return (row["vin"] if row and row["vin"] else "")
-
-
-def _ready_automation_raw(vin: str = "") -> str:
-    own = get_setting(ready_automation_key(vin), "")
-    if own:
-        return own
-    try:
-        one_car = len(get_vehicles()) <= 1
-    except sqlite3.Error:
-        one_car = True
-    return get_setting("ready_automation", "") if one_car else ""
-
-
-def get_ready_automation_config() -> dict:
-    """Sanitised config for the Prepara Veicolo page's automation section — of the SELECTED car."""
-    try:
-        raw = json.loads(_ready_automation_raw() or "{}")
-        if not isinstance(raw, dict):
-            raw = {}
-    except (ValueError, TypeError):
-        raw = {}
-    ac_preset = raw.get("ac_preset")
-    if ac_preset not in _READY_PRESETS:
-        ac_preset = None
-    try:
-        ac_temperature = int(float(raw.get("ac_temperature")))
-    except (TypeError, ValueError):
-        ac_temperature = 22
-    windows_pct = raw.get("windows_pct")
-    try:
-        windows_pct = None if windows_pct is None else max(0, min(int(windows_pct), 100))
-    except (TypeError, ValueError):
-        windows_pct = None
-
-    def _seat(key):
-        v = raw.get(key)
-        return v if v in _READY_SEAT_MODES else "off"
-
-    try:
-        temp_value = float(raw.get("temp_value"))
-    except (TypeError, ValueError):
-        temp_value = 25.0
-    return {
-        "enabled":         bool(raw.get("enabled")),
-        "temp_enabled":    bool(raw.get("temp_enabled")),
-        "temp_comparator": raw.get("temp_comparator") if raw.get("temp_comparator") in (">", "<") else ">",
-        "temp_value":      temp_value,
-        "ac_preset":       ac_preset or "off",   # "off" is a real <select> option, ac_preset=None isn't
-        "ac_temperature":  ac_temperature,
-        "windows_pct":     windows_pct,
-        "seat_driver":     _seat("seat_driver"),
-        "seat_copilot":    _seat("seat_copilot"),
-        "steering":        bool(raw.get("steering")),
-        "mirror":          bool(raw.get("mirror")),
-    }
-
-
-def save_ready_automation_config(form) -> None:
-    """Parse + sanitise the automation form (Werkzeug/Starlette FormData) and persist it as one
-    JSON setting. Mirrors _parse_prepare_form's field names (ac_mode/ac_temperature/seat_driver/
-    seat_copilot/steering/mirror — the shared bundle_fields() macro) plus the automation-only
-    fields (enabled/temp_*/windows_*)."""
-    ac_mode = (form.get("ac_mode") or "off").strip()
-    ac_preset = ac_mode if ac_mode in _READY_PRESETS else None
-    try:
-        ac_temperature = int(float(form.get("ac_temperature") or 22))
-    except (TypeError, ValueError):
-        ac_temperature = 22
-    windows_enabled = (form.get("windows_enabled") or "") in ("1", "on", "true", "True")
-    windows_pct = None
-    if windows_enabled:
-        try:
-            windows_pct = max(0, min(int(float(form.get("windows_pct") or 0)), 100))
-        except (TypeError, ValueError):
-            windows_pct = 0
-
-    def _seat(name):
-        v = form.get("seat_" + name) or "off"
-        return v if v in _READY_SEAT_MODES else "off"
-
-    try:
-        temp_value = float(form.get("temp_value") or 25)
-    except (TypeError, ValueError):
-        temp_value = 25.0
-    cfg = {
-        "enabled":         (form.get("ready_enabled") or "") in ("1", "on", "true", "True"),
-        "temp_enabled":    (form.get("temp_enabled") or "") in ("1", "on", "true", "True"),
-        "temp_comparator": form.get("temp_comparator") if form.get("temp_comparator") in (">", "<") else ">",
-        "temp_value":      round(temp_value, 1),
-        "ac_preset":       ac_preset,
-        "ac_temperature":  ac_temperature,
-        "windows_pct":     windows_pct,
-        "seat_driver":     _seat("driver"),
-        "seat_copilot":    _seat("copilot"),
-        "steering":        (form.get("steering") or "") in ("1", "on", "true", "True"),
-        "mirror":          (form.get("mirror") or "") in ("1", "on", "true", "True"),
-    }
-    # On the SELECTED car: with two cars a single blob meant one climate answering for both.
-    set_setting(ready_automation_key(), json.dumps(cfg))
 
 
 def save_cost_config(mode: str, method: str, bands: list) -> None:
@@ -3066,57 +2941,6 @@ def update_charge_price(key: str, value: float) -> None:
     when its type is confirmed, and only charges confirmed from here on use the
     new price. Same goes for time-of-use band/mode edits."""
     set_setting(key, str(value))
-
-
-def import_charge_row(row: dict) -> str:
-    """One CSV line into the database — FILLING IN the session it matches, or adding it (#237).
-
-    Until now the importer only ever inserted. Re-importing a file therefore doubled the archive
-    silently: 152 charges became 304, and the money with them. Nobody had reported it because
-    nobody had a reason to import twice — until the odometer column gave them one. Someone who has
-    already typed in a year of history must be able to add the kilometres to it without deleting
-    anything first; asking them to wipe 152 rows by hand, in the right order, to repair a defect of
-    ours was never a serious answer.
-
-    A match is the same instant (within a minute — a file that came out of Mate's own export
-    round-trips exactly, one typed by hand may not) AND the same energy to within 0.05 kWh. Both,
-    because either alone is a coincidence waiting to happen.
-
-    ⚠️ Declared, and deliberately narrow: **a matched row updates the odometer and nothing else.**
-    Not the cost, not the type, not the SoC. Mate may have computed those from a real charging
-    curve, and a re-import that quietly overwrote them would be a fresh way to lose data — the very
-    thing this function exists to avoid. Correcting a price is what the charge's own edit form is
-    for.
-
-    Returns 'filled', 'added' or 'unchanged'.
-    """
-    started_at, energy = row.get("started_at"), row.get("energy_kwh")
-    odo = row.get("odometer_km")
-    db = _conn_rw()
-    try:
-        try:
-            match = db.execute(
-                "SELECT id FROM charges "
-                " WHERE vehicle_id = COALESCE(?, vehicle_id) "
-                "   AND ABS(julianday(started_at) - julianday(?)) <= ? "
-                "   AND energy_added_kwh IS NOT NULL AND ABS(energy_added_kwh - ?) <= ? "
-                " ORDER BY ABS(julianday(started_at) - julianday(?)) LIMIT 1",
-                (_current_vehicle_id(), started_at, _IMPORT_MATCH_DAYS,
-                 energy, _IMPORT_MATCH_KWH, started_at)).fetchone()
-        except sqlite3.Error:
-            match = None
-        if match is not None:
-            if odo is None or not _charges_have_odometer(db):
-                return "unchanged"
-            db.execute("UPDATE charges SET odometer_km = ? WHERE id = ?", (odo, match["id"]))
-            db.commit()
-            return "filled"
-    finally:
-        db.close()
-    add_manual_charge(started_at, energy, row.get("cost"), row.get("charge_type", "AC"),
-                      ended_at=row.get("ended_at"), start_soc=row.get("start_soc"),
-                      end_soc=row.get("end_soc"), odometer_km=odo)
-    return "added"
 
 
 def add_manual_charge(started_at: str, energy_kwh: float, cost: Optional[float] = None,

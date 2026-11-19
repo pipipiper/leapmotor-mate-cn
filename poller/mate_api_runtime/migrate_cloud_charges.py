@@ -2,8 +2,21 @@
 import hashlib
 import json
 import math
+import os
 from datetime import datetime, timezone
-from migrate_cloud_trips import number, timestamp
+from leapmotor_cn.protocol import gcj02_to_wgs84
+
+
+def number(value, name):
+    if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+        raise ValueError('Invalid cloud ' + name)
+    return value
+
+
+def timestamp(value):
+    if type(value) is not int or not 946684800000 <= value <= 4102444800000:
+        raise ValueError('Expected epoch milliseconds')
+    return datetime.fromtimestamp(value / 1000, timezone.utc).isoformat()
 
 
 def coordinate(value, limit):
@@ -28,14 +41,18 @@ def migrate(con):
         for (payload,) in rows:
             row=json.loads(payload);vin=row.get('vin')
             if vin not in vehicles:raise ValueError('Unknown charge vehicle')
-            start,end=timestamp(row.get('chargeEarliestTs')),timestamp(row.get('chargeLatestTs'))
-            if row['chargeLatestTs']<row['chargeEarliestTs']:raise ValueError('Reversed charge interval')
+            start_ms=row.get('chargeEarliestTs') if row.get('chargeEarliestTs') is not None else row.get('chargeGunStartTs')
+            end_ms=row.get('chargeLatestTs') if row.get('chargeLatestTs') is not None else row.get('chargeGunEndTs')
+            start,end=timestamp(start_ms),timestamp(end_ms)
+            if end_ms<start_ms:raise ValueError('Reversed charge interval')
             energy=number(row.get('chargeInEnergy'),'charge energy')
             lat=coordinate(row.get('chargeStartLatitude'),90)
             lon=coordinate(row.get('chargeStartLongitude'),180)
             if lat is None or lon is None or (lat==0 and lon==0):lat=lon=None
+            elif os.environ.get('MATE_MARKET','CN').upper()=='CN':
+                lat,lon=gcj02_to_wgs84(lat,lon)
             digest=hashlib.sha256(json.dumps(row,sort_keys=True,separators=(',',':')).encode()).hexdigest()
-            key=hashlib.sha256(json.dumps([vin,row.get('chargeGunStartTs') or row['chargeEarliestTs']]).encode()).hexdigest()
+            key=hashlib.sha256(json.dumps([vin,row.get('chargeGunStartTs') or start_ms]).encode()).hexdigest()
             linked=con.execute('SELECT charge_id,payload_sha256 FROM api_lab_cloud_charge_links WHERE record_key=?',(key,)).fetchone()
             if linked:
                 if not con.execute('SELECT 1 FROM charges WHERE id=?',(linked[0],)).fetchone():
@@ -51,12 +68,12 @@ def migrate(con):
                 (vehicles[vin],end,start,start,end)).fetchone()
             if overlap:
                 report['overlapping']+=1;continue
-            kind={'SLOW':'AC','FAST':'DC'}.get(row.get('chargeType'))
+            kind={'SLOW':'AC','FAST':'DC','QUICK':'DC'}.get(row.get('chargeType'))
             cur=con.execute('''INSERT INTO charges
                 (vehicle_id,started_at,ended_at,energy_added_kwh,duration_min,latitude,longitude,
                  charge_type,note,reconstructed,close_reason)
                 VALUES (?,?,?,?,?,?,?,?,?,0,?)''',
-                (vehicles[vin],start,end,energy,(row['chargeLatestTs']-row['chargeEarliestTs'])/60000,
+                (vehicles[vin],start,end,energy,(end_ms-start_ms)/60000,
                  lat,lon,kind,'Leapmotor cloud chargeInEnergy; not a wallbox meter reading. SoC/cost not supplied.',
                  'cloud_history'))
             con.execute('INSERT INTO api_lab_cloud_charge_links VALUES (?,?,?,?,?)',

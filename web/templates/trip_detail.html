@@ -104,12 +104,11 @@
           {# The consumption, under the rules of the tile it replaces. The poller WITHHOLDS the ΔSoC
              efficiency when the range-extender ran, because the generator refilled the pack mid-drive;
              the rate that does exist (getEC over the whole distance) is NOT the car's appetite — the
-             generator feeds the wheels without passing through the pack — and measured on real trips it
-             reads 46, 82.7, even 386 kWh/100km. So: the research line in blue on the beta build, to be
-             checked against the dashboard, and nothing on the official one (@michapr, beta #27). #}
+             generator feeds the wheels without passing through the pack — so it is marked with ⚡ and
+             kept beside the ordinary line rather than printed under the same label. #}
           {% if not (is_reev and trip.engine_ran) and trip.efficiency_kwh_100km is not none %}
           <div class="text-[10px] font-semibold mt-0.5 truncate {% if trip.efficiency_kwh_100km < 18 %}text-green-400{% elif trip.efficiency_kwh_100km < 22 %}text-yellow-400{% else %}text-red-400{% endif %}">{{ eff_val(trip.efficiency_kwh_100km)|nice }} {{ eff_unit() }}</div>
-          {% elif is_reev and research and trip.engine_ran and trip.reev_elec_kwh_100km is not none %}
+          {% elif is_reev and trip.engine_ran and trip.reev_elec_kwh_100km is not none %}
           <div class="text-[10px] font-semibold text-blue-400/90 mt-0.5 truncate">⚡ {{ trip.reev_elec_kwh_100km|nice }} kWh/100km</div>
           {% endif %}
           {# The electric half of the money only where there are two halves: on an electric car it IS the

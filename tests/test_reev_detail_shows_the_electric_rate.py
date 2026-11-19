@@ -61,7 +61,7 @@ def _trip(tmp_path, monkeypatch, *, km=68.0, ec=1.2, fuel_from=80.0, fuel_to=71.
     return db_reader.get_trip_detail(1)
 
 
-def _render_tile(trip, *, is_reev=True, research=True):
+def _render_tile(trip, *, is_reev=True):
     """Render the real tile out of the real template — a hand-written stand-in cannot fail on a
     guard that lives in Jinja.
 
@@ -84,7 +84,7 @@ def _render_tile(trip, *, is_reev=True, research=True):
     # from a test is how the wrong module gets loaded (see mate-two-main-py-collision).
     env.filters["nice"] = lambda v: "—" if v is None else f"{float(v):.2f}".rstrip("0").rstrip(".")
     out = env.from_string(src[start:end]).render(
-        trip=trip, is_reev=is_reev, research=research, t=lambda k: LABELS[k])
+        trip=trip, is_reev=is_reev, t=lambda k: LABELS[k])
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", out)).strip()
 
 
@@ -130,14 +130,14 @@ def test_it_never_lands_in_the_avg_consumption_tile(tmp_path, monkeypatch):
 
     📍 Since 18/09 there is no labelled tile: the ⚡ box has ONE consumption line, and the two
     quantities are the two branches of it — the ordinary one reading only the efficiency, the
-    research one blue and marked, never the other way round."""
+    range-extender one blue and marked, never the other way round."""
     src = TEMPLATE.read_text()
     block = src[src.index("{# The consumption"):src.index("{# The electric half of the money")]
     ordinary = block[block.index("{% if not (is_reev and trip.engine_ran)"):block.index("{% elif")]
-    research = block[block.index("{% elif"):]
+    reev = block[block.index("{% elif"):]
     assert "reev_elec" not in ordinary, "the electric rate leaked into the ordinary consumption line"
-    assert "reev_elec_kwh_100km" in research and "text-blue-400" in research and "⚡" in research, \
-        "the research rate lost the colour and the mark that set it apart"
+    assert "reev_elec_kwh_100km" in reev and "text-blue-400" in reev and "⚡" in reev, \
+        "the range-extender rate lost the colour and the mark that set it apart"
     assert _trip(tmp_path, monkeypatch)["efficiency_kwh_100km"] is None
 
 
@@ -148,29 +148,15 @@ def test_the_kwh_total_is_not_reprinted(tmp_path, monkeypatch):
     assert visible.count("1.2") == 1, visible
 
 
-def test_the_official_build_is_left_alone(tmp_path, monkeypatch):
-    """`research`-gated to match the trips list exactly. Gating one page and not the other would
-    just move the disagreement to the other build — which is the bug this closes.
-
-    4.7.0 took the beta gate off the REEV surfaces, and this ⚡ rate was the one figure it did
-    NOT take it off: the litres were calibrated against the owner's own app, this was not. So the
-    row keeps its own `{% if research %}` around the rate while the ⛽ litres beside it ship — and
-    the assertion below reads THAT, not the block gate it used to share.
-
-    ⚠️ It used to end in `or "research" in LIST_ROW.read_text()`, which the word in the partial's
-    own header comment satisfies on its own: after the ungating the test passed while the rate
-    was live on every build."""
+def test_the_rate_is_not_behind_a_beta_gate(tmp_path, monkeypatch):
+    """The China build has no BetaTester channel, so the rate that used to sit behind `research`
+    must be either live or gone. It is live: a range-extender owner still needs the electric half
+    of a generator trip, on both the detail page and the list."""
     trip = _trip(tmp_path, monkeypatch)
-    assert "kWh/100km" not in _render_tile(trip, research=False)
+    assert "1.8 kWh/100km" in _render_tile(trip)
     row = LIST_ROW.read_text()
-    assert "{% if research %}" in row, \
-        "the list row has no research gate left at all — the electric rate is live on every build"
-    gate = row.index("{% if research %}")
-    rate = row.index("trip.reev_elec_kwh_100km | nice")
-    close = row.index("{% endif %}", row.index("reev_elec_pending"))
-    assert gate < rate < close, "the list lost its research gate on the electric rate"
-    assert row.index("t('reev_engine_ran')") > close, \
-        "the ⛽ litres were swept behind the research gate with it"
+    assert "{% if research %}" not in row, "the list still carries a beta-only gate"
+    assert row.index("trip.reev_elec_kwh_100km | nice") < row.index("t('reev_engine_ran')")
 
 
 def test_a_pure_electric_drive_on_a_reev_prints_no_rate(tmp_path, monkeypatch):
@@ -183,10 +169,10 @@ def test_a_pure_electric_drive_on_a_reev_prints_no_rate(tmp_path, monkeypatch):
 
 
 def test_a_car_with_no_tank_never_reaches_the_line(tmp_path, monkeypatch):
-    """The line is gated on the car having a tank as well as on the research build and on the
-    generator having run — read on the gate itself, not by counting braces."""
+    """The line is gated on the car having a tank and on the generator having run — read on the
+    gate itself, not by counting braces."""
     src = TEMPLATE.read_text()
-    assert "{% elif is_reev and research and trip.engine_ran and trip.reev_elec_kwh_100km is not none %}" \
+    assert "{% elif is_reev and trip.engine_ran and trip.reev_elec_kwh_100km is not none %}" \
         in src, "the rate is printed outside a range-extender gate"
     assert "kWh/100km" not in _render_tile(_trip(tmp_path, monkeypatch), is_reev=False)
 

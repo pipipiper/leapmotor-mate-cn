@@ -238,15 +238,14 @@ def test_poller_web_writers_share_values_and_source_semantics(api,monkeypatch):
     assert rows[0]['window_fl_open'] is None
 
 
-def test_cn_unsupported_native_routes_do_not_connect(api,monkeypatch):
+def test_cn_removed_native_market_routes_do_not_connect(api,monkeypatch):
     import main as web_main
     from fastapi.testclient import TestClient
     monkeypatch.setattr(web_main.command_client._session,'_connect',lambda:pytest.fail('unsupported route logged in'))
     client = TestClient(web_main.app)
     for path in ('/api/nav/send','/api/climate-schedule','/api/prepare-car/now'):
         response = client.post(path,json={})
-        assert response.status_code == 409
-        assert response.json()['unsupported']
+        assert response.status_code == 404
 
 
 def test_cn_market_setup_skips_certificates(api):
@@ -256,7 +255,7 @@ def test_cn_market_setup_skips_certificates(api):
     response = client.get('/setup')
     assert response.status_code == 200 and '短信登录' in response.text
     assert 'name="password"' not in response.text
-    assert client.get('/api/setup/cert-status').json()['state'] == 'ready'
+    assert client.get('/api/setup/cert-status').status_code == 404
 
 
 @pytest.mark.parametrize('language', ['zh-CN', 'zh-TW'])

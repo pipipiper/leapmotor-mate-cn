@@ -33,9 +33,6 @@ PM = _poller_main()
 def db(tmp_path, monkeypatch):
     d = D.Database(str(tmp_path / "p.db"))
     d.ensure_vehicle("VINPRUNE000000001", "B10")
-    monkeypatch.setattr(PM, "_research_enabled", lambda: False)
-    # the in-process gate is module state: a test that inherited it from the previous one would
-    # pass or fail for the wrong reason (see [[a-test-that-reads-the-environment-is-not-isolated]])
     monkeypatch.setattr(PM, "_last_prune_attempt", 0.0)
     return d
 

@@ -21,9 +21,7 @@ What holds:
 import importlib.util
 import json
 import pathlib
-import shutil
 import sqlite3
-import subprocess
 import threading
 from types import SimpleNamespace
 
@@ -157,70 +155,6 @@ def test_with_no_car_yet_the_install_pin_waits(tmp_path):
     assert database.get_secret("leapmotor_pin") == "5555", "dropped with no car to give it to, it would be lost"
 
 
-@pytest.fixture
-def install(tmp_path, monkeypatch):
-    """The poller's database with the web app on it; `restart()` opens it again, as a new start does."""
-    pytest.importorskip("fastapi", reason="web.main needs fastapi")
-    for var in ("MATE_AUTH_PASSWORD", "SUPERVISOR_TOKEN", "HASSIO_TOKEN", "LEAPMOTOR_PIN"):
-        monkeypatch.delenv(var, raising=False)
-    path = str(tmp_path / "n.db")
-    monkeypatch.setattr(db_reader, "DB_PATH", path)
-    poller = D.Database(path)
-    poller.restart = lambda: D.Database(path)
-    return poller
-
-
-def _web():
-    import main
-    from starlette.testclient import TestClient
-    return TestClient(main.app)
-
-
-def _wizard(**form):
-    r = _web().post("/setup", data={"user": "owner@example.com", "password": "pw", "pin": "2222", **form},
-                    follow_redirects=False)
-    assert r.status_code == 303
-
-
-def _register(poller, vin, car_type):
-    """What the poller does with each car of its first login."""
-    poller.ensure_vehicle(vin, car_type)
-    poller.migrate_install_pin()
-
-
-@pytest.mark.parametrize("car", [T03, C10], ids=["same-account", "account-switch"])
-def test_a_wizard_that_found_no_car_stores_no_pin(install, car):
-    """Detection can fail and setup still finish, with the pack typed by hand. The T03 is the
-    account's history; the car the poller then registers is the T03 again or another account's C10."""
-    _register(install, T03, "T03")
-    db_reader.set_operate_pin("1111", T03)
-    assert _web().post("/api/account/logout").status_code == 204
-    _wizard()
-    _register(install, car, "T03" if car == T03 else "C10")
-    for poller in (install, install.restart()):
-        for vin in (T03, C10):
-            assert db_reader.get_operate_pin(vin) == poller.get_operate_pin(vin) == "", \
-                "neither the PIN the wizard did not store nor the history's comes back"
-
-
-def test_a_wizard_that_found_the_car_gives_it_its_own_pin(install):
-    install.set_secret("leapmotor_pin", "1111")      # an older install's, still waiting for a car
-    _wizard(vin=T03, car_type="T03")
-    _register(install, T03, "T03")
-    for poller in (install, install.restart()):
-        assert db_reader.get_operate_pin(T03) == poller.get_operate_pin(T03) == "2222"
-
-
-def test_a_wizard_that_found_no_car_says_the_pin_is_set_later(tmp_path):
-    """Run in node against the real script: see setup_wizard_detection_fails.cjs."""
-    node = shutil.which("node")
-    if not node:
-        pytest.skip("Node.js required to run the wizard's own script")
-    from test_the_wizard_lets_a_two_car_account_finish import _rendered_script
-    subprocess.run([node, str(ROOT / "tests/setup_wizard_detection_fails.cjs"),
-                    str(_rendered_script(tmp_path)), "note"], check=True)
-
-
 # ── every command path uses it ────────────────────────────────────────────────
 
 class _Api:
@@ -329,22 +263,3 @@ def test_a_failed_pin_read_on_home_assistant_s_side_sends_none(two_cars, monkeyp
     monkeypatch.setattr(two_cars, "get_operate_pin", _locked)
     pmain._handle_mqtt_command(client, service, two_cars, C10, "lock", None)
     assert api.seen[-1] == (C10, ""), "not the PIN the last command left in the session"
-
-
-def test_the_ready_automation_uses_the_pin_of_its_car(two_cars, monkeypatch):
-    """The poller's own commands: a Ready edge on the C10 opens its windows with the C10's PIN, not
-    the one an earlier command left in the session (a session starts with `LEAPMOTOR_PIN` only)."""
-    import ready_automation
-    for state in ("_last_ready", "_fired", "_off_since"):
-        monkeypatch.setattr(ready_automation, state, {})
-    db_reader.set_operate_pin("1234", T03)
-    db_reader.set_operate_pin("9876", C10)
-    two_cars.set_setting(f"ready_automation_{C10.lower()}", json.dumps({"enabled": True, "windows_pct": 20}))
-    api = _Api()
-    api.operation_password = "1234"
-    car = SimpleNamespace(vin=C10, car_type="C10")
-    client = SimpleNamespace(_api=api, _vehicle=car)
-    for ready, now in ((False, 0.0), (True, 100.0)):
-        ready_automation.maybe_trigger(two_cars, client, SimpleNamespace(ready=ready, vin=C10, inside_temp=20.0),
-                                       threading.Lock(), now=now, vehicle=car)
-    assert api.seen == [(C10, "9876")]

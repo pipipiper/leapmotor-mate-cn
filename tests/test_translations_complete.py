@@ -5,20 +5,9 @@ produced an error anywhere:
 
   * de.json was 80 strings short and pl.json 91, so German and Polish users read parts of the app
     in English — including a beta tester who sends us data in German every day.
-  * The setup wizard keeps its OWN dictionary, separate from the locale files, and `acctWarn` was
-    missing from the French and German copies. That string is the warning to use an account
-    dedicated to Mate — the single most important sentence in the wizard and the cause of the most
-    common support case there is. The wizard reads it with `s.acctWarn` and assigns it straight to
-    textContent, and JavaScript turns an undefined into the literal text "undefined", so those two
-    languages showed the word "undefined" where the warning belongs.
 
-Both were invisible: a missing key isn't a crash, it's a gap. The only thing that finds a gap is
+It was invisible: a missing key isn't a crash, it's a gap. The only thing that finds a gap is
 something that counts. Hence this file.
-
-The wizard is parsed out of the template rather than imported, because it lives in JavaScript
-inside HTML. Parsing is done by finding each language's opening line and reading to its closing
-brace — the blocks contain no nested objects — instead of by one big regex, which quietly matched
-different blocks depending on indentation while this was being written.
 """
 import json
 import pathlib
@@ -29,8 +18,6 @@ import pytest
 WEB = pathlib.Path(__file__).resolve().parent.parent / "web"
 LOCALES = WEB / "locales"
 LANGS = ("en", "it", "fr", "de", "pl", "pt-PT", "nl", "es", "cs", "zh-TW", "zh-CN")
-# China has a separate SMS wizard, rather than the international email/certificate flow.
-WIZARD_LANGS = tuple(lang for lang in LANGS if lang not in ("zh-TW", "zh-CN"))
 
 
 def _flat(d, prefix=""):
@@ -45,20 +32,6 @@ def _flat(d, prefix=""):
 
 def _locale(lang):
     return _flat(json.loads((LOCALES / f"{lang}.json").read_text()))
-
-
-def _wizard_blocks():
-    """{lang: {key, ...}} for the dictionaries inside setup.html."""
-    lines = (WEB / "templates" / "setup.html").read_text().split("\n")
-    out = {}
-    for lang in WIZARD_LANGS:
-        opener = re.compile(rf"^\s*['\"]?{re.escape(lang)}['\"]?:\s*\{{\s*$")
-        start = next((i for i, ln in enumerate(lines) if opener.match(ln)), None)
-        assert start is not None, f"the setup wizard has no {lang} block at all"
-        end = next(i for i in range(start + 1, len(lines)) if re.match(r"^\s*\},?\s*$", lines[i]))
-        body = "\n".join(lines[start + 1:end])
-        out[lang] = set(re.findall(r"^\s*(\w+):\s*[\"'`]", body, re.M))
-    return out
 
 
 @pytest.mark.parametrize("lang", [l for l in LANGS if l != "en"])
@@ -79,22 +52,6 @@ def test_locale_has_no_stray_strings(lang):
 def test_every_language_has_a_file():
     for lang in LANGS:
         assert (LOCALES / f"{lang}.json").is_file(), f"no locale file for {lang}"
-
-
-@pytest.mark.parametrize("lang", [l for l in WIZARD_LANGS if l != "en"])
-def test_the_wizard_has_every_string_too(lang):
-    """The wizard's dictionary is a SECOND copy, and this is the one that was short."""
-    blocks = _wizard_blocks()
-    missing = sorted(blocks["en"] - blocks[lang])
-    assert not missing, f"the setup wizard's {lang} block is missing {missing}"
-
-
-def test_the_account_warning_is_in_every_wizard_language():
-    """Named on its own because of what it costs when it is absent: the user signs in with the
-    same account as the official app, the two evict each other's session, the car goes offline
-    and the history fills with holes that nothing explains."""
-    for lang, keys in _wizard_blocks().items():
-        assert "acctWarn" in keys, f"the {lang} wizard would print 'undefined' instead of the warning"
 
 
 @pytest.mark.parametrize("lang", [l for l in LANGS if l != "en"])
@@ -130,15 +87,19 @@ def test_no_page_title_is_hardcoded_english():
                 f"{tpl.name} hardcodes {block.strip()!r} in its <title> — every language reads it"
 
 
-def test_the_allowed_language_list_agrees_with_itself_and_with_disk():
-    """main.py declares the accepted languages in more than one place. Add a language, edit one of
-    them, and it works on one screen and silently resets to English on the other."""
+def test_the_allowed_language_list_agrees_with_the_settings_menu():
+    """The China build offers exactly the languages main.py accepts. A value the page offers but the
+    server refuses would silently reset a reader's choice on the next save."""
     text = (WEB / "main.py").read_text()
     lists = re.findall(r'lang if lang in \(([^)]*)\)', text)
-    assert len(lists) >= 2, "the language tuple moved — this test is now watching nothing"
+    assert lists, "the language tuple moved — this test is now watching nothing"
     parsed = [tuple(re.findall(r'"([\w-]+)"', l)) for l in lists]
     assert len(set(parsed)) == 1, f"main.py disagrees with itself about languages: {set(parsed)}"
-    assert set(parsed[0]) == set(LANGS), f"main.py accepts {parsed[0]}, files on disk are {LANGS}"
+    offered = set(parsed[0])
+    assert offered == {"zh-CN", "zh-TW", "en"}, f"main.py accepts {offered}"
+    settings = (WEB / "templates" / "settings.html").read_text()
+    for lang in offered:
+        assert f'<option value="{lang}"' in settings, f"Settings does not offer {lang}"
 
 
 @pytest.mark.parametrize('lang', LANGS)
@@ -149,13 +110,14 @@ def test_locale_strings_are_inside_the_runtime_translation_dictionary(lang):
 
 
 @pytest.mark.parametrize('lang', LANGS)
-def test_cloud_history_strings_resolve_through_the_real_translator(lang):
+def test_cn_charge_strings_resolve_through_the_real_translator(lang):
     from i18n import get_t
     t = get_t(lang)
-    for key in ('cloud_import_title', 'cloud_import_enabled', 'cloud_import_help',
-                'cloud_import_save', 'cloud_import_saved', 'trip_energy_source_cloud',
-                'cloud_zero_hint', 'gps_unavailable', 'soc_unavailable'):
+    for key in ('cn_charge_sync_btn', 'cn_charge_syncing', 'cn_charge_stats_title',
+                'cn_charge_total_kwh', 'cn_charge_total_count', 'cn_charge_fast_pct',
+                'cn_charge_detail_title', 'cn_charge_no_data', 'gps_unavailable',
+                'soc_unavailable'):
         assert t(key) != key, (lang, key)
-    if lang == 'it':
-        assert t('cloud_import_title') == 'Storico viaggi cloud'
-        assert t('cloud_import_save') == 'Salva'
+    if lang == 'zh-CN':
+        assert t('cn_charge_stats_title') == '充电统计'
+        assert t('cn_charge_sync_btn') == '同步官方充电记录'
