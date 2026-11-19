@@ -11,9 +11,9 @@
     <h1 class="text-2xl font-bold text-white">{{ t('charges_title') }}</h1>
     <p class="text-slate-400 text-sm mt-1">{{ total }} {{ t('sessions_recorded') }}</p>
   </div>
-  {% if total or (china_market() and not demo) %}
+  {% if total or china_market() %}
   <div class="shrink-0 flex items-center gap-2 flex-wrap justify-end">
-    {% if china_market() and not demo %}
+    {% if china_market() %}
     <button type="button" id="cn-charge-sync-btn"
             class="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer">
       <span>☁️</span>
@@ -163,7 +163,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
 });
 </script>
 
-{% if china_market() and not demo %}
+{% if china_market() %}
 <section id="cn-charge-stats-card" class="card mb-6">
   <div class="grid grid-cols-3 rounded-xl border border-slate-700/80 bg-slate-900/80 p-1 text-xs mb-4">
     <button type="button" data-cn-mode="7d"

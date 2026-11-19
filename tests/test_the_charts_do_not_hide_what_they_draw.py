@@ -116,7 +116,7 @@ def mate_url(tmp_path_factory):
            "WEB_PORT": str(port),
            "PYTHONPATH": str(ROOT / "web"),
            "MATE_RESEARCH": "0"}
-    for leak in ("MATE_AUTH_PASSWORD", "MATE_DEMO", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+    for leak in ("MATE_AUTH_PASSWORD", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
         env.pop(leak, None)
 
     log = data / "web.log"

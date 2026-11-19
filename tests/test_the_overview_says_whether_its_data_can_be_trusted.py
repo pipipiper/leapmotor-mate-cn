@@ -231,16 +231,6 @@ def test_the_page_judges_the_car_it_shows_not_the_car_polled_last(web):
     assert out["state"] == "fetch_failed" and "timed out" in out["reason"]
 
 
-def test_the_demo_runs_no_poller_and_shows_no_tile(web, monkeypatch):
-    db, client = web
-    _position(db, 60)                      # no heartbeat at all — the demo is web only
-    monkeypatch.setattr(main, "_IS_DEMO", True)
-    assert 'id="link-pill"' not in client.get("/").text
-    assert client.get("/api/link-pill").text == ""
-    monkeypatch.setattr(main, "_IS_DEMO", False)
-    assert 'data-link="not_polling"' in client.get("/api/link-pill").text
-
-
 # ── the two renders agree ─────────────────────────────────────────────────────
 
 def test_the_status_card_itself_stays_as_it_was(web):

@@ -278,7 +278,6 @@ class TestWhatWeShowKeepsWhatWeMeasured:
 
     def test_a_t03_keeps_hidden_what_it_has_no_hardware_for(self, monkeypatch):
         pytest.importorskip('paho.mqtt.client', reason='il ponte MQTT del poller vuole paho')
-        monkeypatch.delenv('MATE_DEMO', raising=False)
         page = self._web_shows(monkeypatch)
         home_assistant = self._home_assistant_shows()
         assert page == home_assistant, \
@@ -294,7 +293,6 @@ class TestWhatWeShowKeepsWhatWeMeasured:
         la T03 vedrebbe comparire i pulsanti che `command_shown` dichiara nascosti."""
         import importlib.util
         from pathlib import Path as P
-        monkeypatch.delenv('MATE_DEMO', raising=False)
         path = P(__file__).resolve().parents[1] / 'web' / 'capability_profile.py'
         spec = importlib.util.spec_from_file_location('capability_profile_css', path)
         cp = importlib.util.module_from_spec(spec)

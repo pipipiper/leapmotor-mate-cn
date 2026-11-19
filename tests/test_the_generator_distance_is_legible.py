@@ -107,7 +107,7 @@ def page(tmp_path_factory):
     port = _free_port()
     env = {**os.environ, "DB_PATH": str(db), "WEB_PORT": str(port),
            "PYTHONPATH": str(ROOT / "web"), "MATE_RESEARCH": "1"}
-    for leak in ("MATE_AUTH_PASSWORD", "MATE_DEMO", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+    for leak in ("MATE_AUTH_PASSWORD", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
         env.pop(leak, None)
     log = (tmp / "web.log").open("w")
     proc = subprocess.Popen([sys.executable, str(ROOT / "tests" / "no_internet.py"),

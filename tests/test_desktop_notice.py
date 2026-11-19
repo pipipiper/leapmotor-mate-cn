@@ -30,9 +30,9 @@ def ctx(tmp_path, monkeypatch):
     return build
 
 
-def shows(c, demo=False):
+def shows(c):
     """The template's condition, kept in one place so a change can't drift from the tests."""
-    return bool(c["shell_version"]) and not c["dismissed"] and not demo
+    return bool(c["shell_version"]) and not c["dismissed"]
 
 
 def test_shown_in_the_app(ctx, monkeypatch):
@@ -44,13 +44,6 @@ def test_never_shown_on_home_assistant_or_docker(ctx, monkeypatch):
     """No shell version → not the app → the notice would be a lie, so it must not appear."""
     monkeypatch.delenv("MATE_DESKTOP_VERSION", raising=False)
     assert shows(ctx()) is False
-
-
-def test_not_shown_in_demo(ctx, monkeypatch):
-    """The demo already carries its own banner; two stacked strips push the page down for
-    someone who is only looking around and has no data to lose."""
-    monkeypatch.setenv("MATE_DESKTOP_VERSION", "1.0.0")
-    assert shows(ctx(), demo=True) is False
 
 
 def test_dismissal_sticks(ctx, monkeypatch):

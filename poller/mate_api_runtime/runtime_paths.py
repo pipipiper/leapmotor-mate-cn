@@ -31,8 +31,6 @@ def prepare_installation():
     from bootstrap_independent import bootstrap
     p = paths()
     p.data.mkdir(parents=True, exist_ok=True)
-    if os.environ.get('MATE_DEMO', '').lower() in ('1', 'true'):
-        return {'state': 'demo'}
     backup_before_migration(p.db)
     if os.environ.get("MATE_MARKET", "CN").upper() == "CN":
         return {"state": "ready", "market": "CN", "manual_upload_required": False}

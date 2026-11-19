@@ -1097,9 +1097,8 @@ Sous l'énergie d'un trajet, l'étiquette **getEC** devient **Mesurée par la vo
    - [Navigation](#navigation) · [Véhicule](#véhicule) · [Wallbox](#wallbox)
 7. [Paramètres](#7-paramètres)
 8. [Les intégrations en détail (Wallbox, ABRP, MQTT)](#8-les-intégrations-en-détail)
-9. [Mode démo](#9-mode-démo)
-10. [Questions fréquentes et résolution des problèmes](#10-questions-fréquentes-et-résolution-des-problèmes)
-11. [Glossaire](#11-glossaire)
+9. [Questions fréquentes et résolution des problèmes](#9-questions-fréquentes-et-résolution-des-problèmes)
+10. [Glossaire](#10-glossaire)
 
 ---
 
@@ -1159,10 +1158,6 @@ Pour configurer Mate, il vous faut trois choses :
 3. **L'e-mail, le mot de passe et le code PIN d'opération de la voiture.** Le **PIN à 4 chiffres** est celui que
    vous utilisez aussi dans l'application officielle pour autoriser les commandes à distance (verrouillage,
    climatisation…).
-
-> 💡 Vous voulez juste jeter un coup d'œil sans rien configurer ? Sautez tout et utilisez le
-> **[mode démo](#9-mode-démo)** : Mate démarre avec un mois de données fictives réalistes, sans voiture et
-> sans compte.
 
 ---
 
@@ -1251,14 +1246,6 @@ bouton : ce sur quoi tu appuies dépend de la façon dont tu fais tourner Mate.
 
 Au premier accès, Mate affiche un **assistant** (procédure guidée). En haut, vous pouvez choisir la langue
 (🇫🇷 Français). Ensuite :
-
-### Étape 0 — Choisissez comment commencer
-
-Deux boutons :
-
-- **▶ Configurer ma voiture** — la configuration proprement dite (voir la suite).
-- **🧪 Essayer la démo** — entre en mode démonstration avec des données fictives. Vous pouvez en sortir quand
-  vous voulez.
 
 ### Étape 1 — Connexion au compte
 
@@ -2270,21 +2257,7 @@ préfixe et la même voiture, Home Assistant ne voit qu'**un seul appareil** : l
 fonctionner, et surtout **chaque commande part deux fois**. Mate le détecte désormais et le signale ;
 la version BetaTester se déplace d'elle-même, la version normale ne bouge jamais.
 
-## 9. Mode démo
-
-La **démo** sert à essayer Mate sans voiture et sans compte : elle démarre avec **un mois de données fictives
-mais réalistes**. Vous pouvez l'activer de deux manières :
-
-- depuis l'assistant de premier démarrage, bouton **🧪 Essayer la démo** ;
-- ou en lançant le conteneur avec la variable `MATE_DEMO=1`.
-
-En démo : les données sont ouvertement fictives (badge **DEMO**), les commandes sont **simulées** (aucune
-voiture n'est contactée) et une bannière en haut reste toujours visible avec le bouton pour **quitter**. En
-sortant, Mate revient à la configuration normale.
-
----
-
-## 10. Questions fréquentes et résolution des problèmes
+## 9. Questions fréquentes et résolution des problèmes
 
 **La voiture passe souvent « hors ligne » / je vois « Token non valide » en continu.**
 C'est presque toujours parce que le **même compte Leapmotor est utilisé ailleurs** (application officielle, une
@@ -2381,7 +2354,7 @@ données **avec sa `secret.key`**.
 
 ---
 
-## 11. Glossaire
+## 10. Glossaire
 
 - **SoC** (*State of Charge*) — pourcentage de charge de la batterie.
 - **SoH** (*State of Health*) — état de santé de la batterie : capacité restante par rapport au neuf.

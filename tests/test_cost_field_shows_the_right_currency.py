@@ -82,7 +82,7 @@ class _Request:
 def _render(name, currency, **ctx):
     return _env().get_template(name).render(
         currency=currency, t=lambda k, **kw: k, charge_types=db_reader.CHARGE_TYPES,
-        request=_Request(), page="charges", version="test", demo=False,
+        request=_Request(), page="charges", version="test",
         fmt_dur=lambda v: "—" if v is None else f"{v:.0f} min", **ctx)
 
 

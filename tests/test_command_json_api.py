@@ -70,7 +70,6 @@ def test_cooldown_returns_structured_json(monkeypatch):
 
 
 def test_success_returns_ok_done_json(monkeypatch):
-    monkeypatch.setattr(main, "_IS_DEMO", False)
     monkeypatch.setattr(main.db_reader, "get_latest_status", lambda: {})
     monkeypatch.setattr(main.db_reader, "get_language", lambda: "en")
     monkeypatch.setattr(main.db_reader, "set_setting", lambda *a, **k: None)
@@ -81,7 +80,6 @@ def test_success_returns_ok_done_json(monkeypatch):
 
 
 def test_failure_returns_error_json(monkeypatch):
-    monkeypatch.setattr(main, "_IS_DEMO", False)
     monkeypatch.setattr(main.db_reader, "get_latest_status", lambda: {})
     monkeypatch.setattr(main.db_reader, "get_language", lambda: "en")
     monkeypatch.setattr(main.db_reader, "set_setting", lambda *a, **k: None)

@@ -751,10 +751,9 @@ def _get():
     """This thread's read connection to `DB_PATH`, opened once.
 
     Keyed on the path AND on the file it currently names. A restore from backup used to swap a new
-    file under the same name (it now copies into the live file, #383), and the demo flag still points
-    the path at another file; without the device/inode in the key the reader would go on reading the
-    file that was replaced under it, and would never say so. The `stat` costs about a microsecond
-    against the ~30 the connection costs.
+    file under the same name (it now copies into the live file, #383); without the device/inode in
+    the key the reader would go on reading the file that was replaced under it, and would never say
+    so. The `stat` costs about a microsecond against the ~30 the connection costs.
     """
     path = DB_PATH
     try:
@@ -12367,7 +12366,7 @@ def _data_version(_db=None) -> int:
     tests of the parts went green while the cache served a list a write had already changed.
 
     So one connection answers this question for the whole process, opened on first use and reopened
-    when the path changes (the demo flag points it elsewhere). It only ever reads the pragma."""
+    when the path changes. It only ever reads the pragma."""
     path = DB_PATH
     with _version_lock:                      # one connection is not a thread-safe cursor
         if _version_conn[0] != path or _version_conn[1] is None:

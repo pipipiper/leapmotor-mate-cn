@@ -33,7 +33,6 @@
     <label class="block text-sm"><span data-cn-key="cn_timezone">{{ t('cn_timezone') }}</span><select name="timezone" class="mt-2 w-full bg-slate-800 rounded-lg px-3 py-3"><option value="Asia/Shanghai" data-cn-key="cn_timezone_shanghai">{{ t('cn_timezone_shanghai') }}</option><option value="Asia/Hong_Kong" data-cn-key="cn_timezone_hong_kong">{{ t('cn_timezone_hong_kong') }}</option><option value="Asia/Taipei" data-cn-key="cn_timezone_taipei">{{ t('cn_timezone_taipei') }}</option></select></label>
     <button type="submit" class="w-full bg-teal-600 hover:bg-teal-500 rounded-lg py-3 font-medium" data-cn-key="cn_setup_finish">{{ t('cn_setup_finish') }}</button>
   </form>
-  <button id="demo" type="button" class="text-sm text-slate-400 hover:text-white" data-cn-key="cn_demo">{{ t('cn_demo') }}</button>
   <p class="text-xs text-slate-500" data-cn-key="cn_storage_hint">{{ t('cn_storage_hint') }}</p>
 </main>
 <script>
@@ -124,6 +123,5 @@ byId('verify').onclick = async () => {
 byId('car-form').onsubmit = () => {
   byId('cars-json').value = JSON.stringify(cars.map((car,index) => ({vin:car.vin, car_type:car.car_type, battery:byId(`battery-${index}`).value, pin:byId(`pin-${index}`).value, is_reev:byId(`reev-${index}`).checked})))
 }
-byId('demo').onclick = async () => {try {await api('api/demo/enable', {}); location.reload()} catch (error) {say(error.message)}}
 </script>
 </body></html>

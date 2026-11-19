@@ -1087,9 +1087,8 @@ Unter der Energie einer Fahrt heißt die Bezeichnung **getEC** jetzt **Vom Auto 
    - [Navigation](#navigation) · [Fahrzeug](#fahrzeug) · [Wallbox](#wallbox)
 7. [Einstellungen](#7-einstellungen)
 8. [Die Integrationen im Detail (Wallbox, ABRP, MQTT)](#8-die-integrationen-im-detail)
-9. [Demo-Modus](#9-demo-modus)
-10. [Häufige Fragen und Fehlerbehebung](#10-häufige-fragen-und-fehlerbehebung)
-11. [Glossar](#11-glossar)
+9. [Häufige Fragen und Fehlerbehebung](#9-häufige-fragen-und-fehlerbehebung)
+10. [Glossar](#10-glossar)
 
 ---
 
@@ -1146,9 +1145,6 @@ Um Mate einzurichten, benötigen Sie drei Dinge:
 
 3. **E-Mail, Passwort und Bedien-PIN des Autos.** Der **vierstellige PIN** ist derselbe, den Sie auch in der
    offiziellen App verwenden, um die Fernbefehle (Verriegeln, Klima…) zu autorisieren.
-
-> 💡 Sie wollen nur einen Blick darauf werfen, ohne etwas einzurichten? Überspringen Sie alles und nutzen Sie den
-> **[Demo-Modus](#9-demo-modus)**: Mate startet mit einem Monat realistischer Beispieldaten, ohne Auto und ohne Konto.
 
 ---
 
@@ -1236,13 +1232,6 @@ Schaltfläche: Was du drückst, hängt davon ab, wie du Mate betreibst.
 
 Beim ersten Zugriff zeigt Mate einen **Assistenten** (geführtes Verfahren). Oben können Sie die Sprache wählen
 (🇩🇪 Deutsch). Dann:
-
-### Schritt 0 — Wählen Sie, wie Sie beginnen
-
-Zwei Schaltflächen:
-
-- **▶ Mein Auto einrichten** — die eigentliche Einrichtung (weiter unten).
-- **🧪 Demo ausprobieren** — wechselt in den Demo-Modus mit Beispieldaten. Sie können jederzeit aussteigen.
 
 ### Schritt 1 — Anmeldung am Konto
 
@@ -2244,21 +2233,7 @@ gleichem Auto sind sie für Home Assistant **ein Gerät**: das zweite scheint ni
 und vor allem wird **jeder Befehl zweimal ausgeführt**. Mate erkennt das jetzt und sagt es; die
 BetaTester-Version zieht von selbst um, die normale bleibt immer stehen.
 
-## 9. Demo-Modus
-
-Der **Demo-Modus** dient dazu, Mate ohne Auto und ohne Konto auszuprobieren: Er startet mit **einem Monat
-fingierter, aber realistischer Daten**. Sie können ihn auf zwei Arten aktivieren:
-
-- über den Assistenten beim ersten Start, Schaltfläche **🧪 Demo ausprobieren**;
-- oder indem Sie den Container mit der Variablen `MATE_DEMO=1` starten.
-
-In der Demo: Die Daten sind ausdrücklich fingiert (Abzeichen **DEMO**), die Befehle sind **simuliert** (es wird
-kein Auto kontaktiert) und ein Banner oben bleibt immer sichtbar mit der Schaltfläche zum **Verlassen**. Beim
-Verlassen kehrt Mate zur normalen Konfiguration zurück.
-
----
-
-## 10. Häufige Fragen und Fehlerbehebung
+## 9. Häufige Fragen und Fehlerbehebung
 
 **Das Auto geht oft „offline" / ich sehe ständig „Token ungültig".**
 Fast immer liegt es daran, dass **dasselbe Leapmotor-Konto anderswo verwendet wird** (offizielle App, eine andere
@@ -2354,7 +2329,7 @@ Unter *Einstellungen → Export/Backup* laden Sie die Datenbank (und die CSVs) h
 
 ---
 
-## 11. Glossar
+## 10. Glossar
 
 - **SoC** (*State of Charge*) — Ladestand der Batterie in Prozent.
 - **SoH** (*State of Health*) — Gesundheitszustand der Batterie: verbleibende Kapazität gegenüber dem Neuzustand.

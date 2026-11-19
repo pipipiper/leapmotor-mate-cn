@@ -28,7 +28,6 @@ poller pass their own get/set via `accessor=`). Accumulates across sessions.
 """
 from __future__ import annotations
 import json
-import os
 from typing import Callable, Optional
 
 # feature_key -> {label, kind, signals(status-signal ids whose live value proves a sensor works),
@@ -319,25 +318,20 @@ def command_shown(vin: str, command_key: str, get_setting: Optional[Callable] = 
     T03 — #144); otherwise mapped to its gating feature (COMMAND_FEATURE), and commands with neither
     are always shown."""
     from api_backend import is_china
-    if is_china() and os.environ.get("MATE_DEMO", "").lower() not in ("1", "true"):
+    if is_china():
         from cn_capabilities import stored_permission
         if get_setting is None:
             from cn_backend import get_setting
         return stored_permission(vin, command_key, get_setting)
-    if os.environ.get("MATE_DEMO", "").lower() not in ("1", "true"):
-        # The cloud decides what may be SENT; what we SHOW also keeps what was measured on the
-        # car. A model that over-declares would otherwise get a button that can never act: the
-        # European T03 lists STEERING_WHEEL and heated seats it has no hardware for (#144).
-        # A command with no COMMAND_FEATURE entry is its own feature name in MODEL_ABSENT
-        # (`prepare_car`), so fall back to the key: a gate that read only the map would let it by.
-        if car_type and model_hidden(car_type, COMMAND_FEATURE.get(command_key, command_key)):
-            return False
-        from ui_command_access import command_allowed
-        return command_allowed(vin,command_key,get_setting or _default_get_setting())
-    if not ability_supported(command_key, abilities):
+    # The cloud decides what may be SENT; what we SHOW also keeps what was measured on the
+    # car. A model that over-declares would otherwise get a button that can never act: the
+    # European T03 lists STEERING_WHEEL and heated seats it has no hardware for (#144).
+    # A command with no COMMAND_FEATURE entry is its own feature name in MODEL_ABSENT
+    # (`prepare_car`), so fall back to the key: a gate that read only the map would let it by.
+    if car_type and model_hidden(car_type, COMMAND_FEATURE.get(command_key, command_key)):
         return False
-    feat = COMMAND_FEATURE.get(command_key)
-    return True if feat is None else is_shown(vin, feat, get_setting, car_type=car_type)
+    from ui_command_access import command_allowed
+    return command_allowed(vin,command_key,get_setting or _default_get_setting())
 
 
 # Feature-level ability gate (not a command button): the WEEKLY/CYCLIC charge schedule. A car that

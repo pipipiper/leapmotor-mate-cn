@@ -18,7 +18,7 @@ on the day / month / period cards, the Overview and Statistics summaries, the ef
 temperature chart, and the REEV battery packs in the setup wizard.
 
 **These are on BetaTester only, and go with it:** the research diary, the encrypted research pack and the consent
-that opens them, the `?demo` preview, and the ⚡ electric rate of a generator drive
+that opens them, and the ⚡ electric rate of a generator drive
 (`reev_elec_kwh_100km`) — the one figure that has never been checked against a real dashboard.
 
 To report a problem, the official build's diagnostics bundle (*Settings → Diagnostics*) carries
@@ -122,7 +122,7 @@ Statistiche, il grafico del consumo contro la temperatura, e i pacchi batteria R
 guidata.
 
 **Ci sono solo su BetaTester, e se ne vanno con lei:** il diario di ricerca, il pacchetto cifrato e il consenso che li apre,
-l'anteprima `?demo`, e la riga ⚡ del consumo elettrico di una guidata col generatore
+e la riga ⚡ del consumo elettrico di una guidata col generatore
 (`reev_elec_kwh_100km`) — l'unica cifra che non è mai stata confrontata con un cruscotto vero.
 
 Per segnalare un problema, il pacchetto di diagnostica della build ufficiale (*Impostazioni →

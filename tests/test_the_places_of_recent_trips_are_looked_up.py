@@ -8,15 +8,11 @@ provider; "nothing here" is final for the provider that said it. Every request g
 replaced here by the providers' answers, so the choice of provider and the mapping of its answer are the
 real ones.
 """
-import os
 import sqlite3
-import subprocess
-import sys
 import threading
 import time
 import urllib.error
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
@@ -499,16 +495,3 @@ def test_a_minute_passes_between_sweeps_whichever_way_the_clock_moved(car, start
     clock[0] -= 3600
     place_lookup.maybe_sweep()
     assert len(started) == 2, "the host clock stepped back an hour"
-
-
-def test_the_demo_names_its_trips_without_asking_anyone(tmp_path, monkeypatch):
-    """The demo seeds a new database at every start: its addresses come with it, or each start would ask again."""
-    path = str(tmp_path / "demo.db")
-    seed = Path(__file__).resolve().parent.parent / "poller" / "seed_demo.py"
-    subprocess.run([sys.executable, str(seed)], env={**os.environ, "DB_PATH": path}, check=True, capture_output=True)
-    monkeypatch.setattr(db_reader, "DB_PATH", path)
-    monkeypatch.setattr(geocode, "_get", Providers())
-    assert place_lookup.sweep(pause=lambda s: None)["calls"] == 0
-    recent = [dict(r) for r in db_reader._get().execute("SELECT * FROM trips ORDER BY started_at DESC LIMIT 5")]
-    db_reader.trip_places(recent)
-    assert all(t["start_place"] and t["end_place"] for t in recent)

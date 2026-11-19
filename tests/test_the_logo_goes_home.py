@@ -8,7 +8,7 @@ The link is `href="."`, relative like every other path in `base.html`: under the
 ingress the page is served below a prefix that `<base href>` supplies, and an absolute "/" would
 leave Mate for the Home Assistant root.
 
-🔑 Only the mark and the name are inside the link. The version, DEMO and beta chips sit beside
+🔑 Only the mark and the name are inside the link. The version and beta chips sit beside
 them and stay out: `version_badge` renders an anchor of its own when an update is waiting, and an
 anchor inside an anchor is closed by the parser at the inner one — the rest of the bar would fall
 outside both links.

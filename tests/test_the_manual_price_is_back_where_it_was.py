@@ -242,7 +242,7 @@ def test_the_search_offers_manual_among_the_types():
                    unconfirmed=0, station="", station_info=None, cal_year=2026, cal_month=9,
                    cal_open_day=0, cal_years=[2026], highlight=0, vehicle={},
                    charges_have_odometer=True, request=type("R", (), {"headers": {}})(),
-                   page="charges", version="test", demo=False)
+                   page="charges", version="test")
     select = re.search(r'<select name="type".*?</select>', html, re.S)
     assert select, "no type filter"
     assert re.search(r'<option value="MANUAL">\s*✎ charge_manual\s*</option>', select.group(0))
@@ -256,7 +256,7 @@ def test_the_home_public_card_draws_the_manual_charges():
                    unconfirmed=1, station="", station_info=None, cal_year=2026, cal_month=9,
                    cal_open_day=0, cal_years=[2026], highlight=0, vehicle={},
                    charges_have_odometer=True, request=type("R", (), {"headers": {}})(),
-                   page="charges", version="test", demo=False)
+                   page="charges", version="test")
     start = html.index("home_public_distribution")
     card = html[start:html.index("<script>", start)]
     assert "charge_manual" in card
@@ -276,7 +276,7 @@ def test_the_home_public_card_shows_free_charges_only_when_there_are_some():
                    unconfirmed=0, station="", station_info=None, cal_year=2026, cal_month=9,
                    cal_open_day=0, cal_years=[2026], highlight=0, vehicle={},
                    charges_have_odometer=True, request=type("R", (), {"headers": {}})(),
-                   page="charges", version="test", demo=False)
+                   page="charges", version="test")
     start = html.index("home_public_distribution")
     card = html[start:html.index("<script>", start)]
     assert "charge_free" in card and "· 40%" in card      # 2 of 5 sessions

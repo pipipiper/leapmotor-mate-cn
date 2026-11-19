@@ -1,7 +1,7 @@
 """The notice bars must never outrank the navigation (@ebagnoli, beta #13).
 
-On a phone the sidebar is an off-canvas drawer. Three sticky strips live at the top of every page —
-the demo bar, the auth warning and the MateDesktop notice — and each carried a z-index ABOVE the
+On a phone the sidebar is an off-canvas drawer. Two sticky strips live at the top of every page —
+the auth warning and the MateDesktop notice — and each carried a z-index ABOVE the
 drawer, so opening the menu painted the strip over it and swallowed the top entries: *"ci sono voci
 del menù alle quali non puoi accedere"*.
 
@@ -34,7 +34,7 @@ def test_the_drawer_and_its_overlay_still_sit_where_this_test_thinks():
     assert re.search(rf'id="sidebar-overlay"[^>]*z-\[{OVERLAY}\]', SRC), "the overlay's z-index moved"
 
 
-@pytest.mark.parametrize("bar", ["auth-bar", "desktop-bar", "demo-bar"])
+@pytest.mark.parametrize("bar", ["auth-bar", "desktop-bar"])
 def test_a_notice_bar_stays_under_the_open_menu(bar):
     assert _z_of_id(SRC, bar) < OVERLAY, f"{bar} would cover the open mobile menu"
 
@@ -43,5 +43,5 @@ def test_no_notice_bar_ties_with_the_drawer():
     """Equal z-index is not safe: the strips come later in the document, so a tie still paints them
     on top. Kept as its own test because a future edit is far more likely to land on 1003 than above
     it — the drawer's own value is the number someone would copy."""
-    zs = [_z_of_id(SRC, b) for b in ("auth-bar", "desktop-bar", "demo-bar")]
+    zs = [_z_of_id(SRC, b) for b in ("auth-bar", "desktop-bar")]
     assert all(z != DRAWER for z in zs), "a notice bar ties with the drawer and wins on DOM order"

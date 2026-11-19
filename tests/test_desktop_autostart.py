@@ -35,9 +35,9 @@ def env(tmp_path, monkeypatch):
     return main
 
 
-def shows(shell_version, demo=False):
+def shows(shell_version):
     """The template's condition, kept here so a change in one can't drift from the other."""
-    return bool(shell_version) and not demo
+    return bool(shell_version)
 
 
 def test_the_switch_stores_the_answer(env):
@@ -76,11 +76,6 @@ def test_never_offered_on_home_assistant_or_docker(env):
 
 def test_offered_in_the_app(env):
     assert shows("1.0.0") is True
-
-
-def test_not_offered_in_the_demo(env):
-    """The demo runs on a throwaway database — the answer would be written there and lost."""
-    assert shows("1.0.0", demo=True) is False
 
 
 def test_every_language_has_the_strings(env):

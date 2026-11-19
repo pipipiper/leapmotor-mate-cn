@@ -69,7 +69,7 @@ def test_the_button_is_macos_only_and_asks_first():
 def test_the_button_lives_inside_the_desktop_card():
     """Which is itself gated on shell_version: on Home Assistant and Docker the whole card is
     absent, so this can never appear there however the platform variable is set."""
-    card = SETTINGS[SETTINGS.index("{% if shell_version and not demo %}"):]
+    card = SETTINGS[SETTINGS.index("{% if shell_version %}"):]
     card = card[:card.index("{% endcall %}")]
     assert "desktop-remove" in card
 

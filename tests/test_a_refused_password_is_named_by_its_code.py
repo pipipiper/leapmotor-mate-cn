@@ -94,7 +94,6 @@ def _history_waits(monkeypatch, error):
 
     def sync_once(on_login=None):
         raise error
-    monkeypatch.delenv("MATE_DEMO", raising=False)
     monkeypatch.setitem(sys.modules, "history_worker", SimpleNamespace(sync_once=sync_once))
     monkeypatch.setattr(history_service, "threading", SimpleNamespace(Event=Event, Thread=Thread))
     monkeypatch.setattr(history_service, "_thread", None)

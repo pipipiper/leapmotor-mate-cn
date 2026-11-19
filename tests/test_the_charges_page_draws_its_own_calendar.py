@@ -155,7 +155,7 @@ def _page(**over):
            "cal_month": 8, "cal_open_day": 0, "cal_years": [2026], "highlight": 0, "vehicle": {},
            "charges_have_odometer": True, "currency": EUR, "t": lambda k, **kw: k,
            "charge_types": db_reader.CHARGE_TYPES, "page": "charges", "version": "test",
-           "demo": False, "request": type("R", (), {"headers": {"x-ingress-path": ""}})(),
+           "request": type("R", (), {"headers": {"x-ingress-path": ""}})(),
            "fmt_dur": lambda v: "—", "calendar_html": "<div id='charges-calendar-month'>GRID</div>"}
     ctx.update(over)
     return _env().get_template("charges.html").render(ctx)

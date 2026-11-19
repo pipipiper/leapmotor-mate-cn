@@ -103,7 +103,7 @@ def _env():
 
 def _render(**ctx):
     base = dict(trip=_reev_trip(), t=lambda k, **kw: k, request=_Request(), page="trips",
-                version="test", demo=False, is_reev=True,
+                version="test", is_reev=True,
                 currency={"name": "Euro", "symbol": "€", "pos": "after", "dec": 2},
                 prev_trip_id=None, next_trip_id=None)
     base.update(ctx)

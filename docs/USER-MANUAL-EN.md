@@ -999,9 +999,8 @@ Under a trip's energy, the label that read **getEC** now reads **Measured by the
    - [Navigation](#navigation) · [Vehicle](#vehicle) · [Wallbox](#wallbox)
 7. [Settings](#7-settings)
 8. [The integrations in detail (Wallbox, ABRP, MQTT)](#8-the-integrations-in-detail)
-9. [Demo mode](#9-demo-mode)
-10. [Frequently asked questions and troubleshooting](#10-frequently-asked-questions-and-troubleshooting)
-11. [Glossary](#11-glossary)
+9. [Frequently asked questions and troubleshooting](#9-frequently-asked-questions-and-troubleshooting)
+10. [Glossary](#10-glossary)
 
 ---
 
@@ -1057,9 +1056,6 @@ To set Mate up you need three things:
 
 3. **Email, password and the car's operation PIN.** The **4-digit PIN** is the one you also use
    in the official app to authorize remote commands (locking, climate…).
-
-> 💡 Just want to take a look without setting anything up? Skip it all and use **[demo mode](#9-demo-mode)**:
-> Mate starts with a month of realistic fake data, with no car and no account.
 
 ---
 
@@ -1145,13 +1141,6 @@ Mate.
 
 On your first sign-in Mate shows a **wizard** (guided procedure). At the top you can choose the
 language (🇮🇹 Italiano). Then:
-
-### Step 0 — Choose how to start
-
-Two buttons:
-
-- **▶ Configure my car** — the actual setup (continues below).
-- **🧪 Try the demo** — enters demo mode with fake data. You can leave whenever you want.
 
 ### Step 1 — Account sign-in
 
@@ -2094,21 +2083,7 @@ the same car, they are **one device** to Home Assistant: the second appears not 
 **every command is executed twice**. Mate now notices and says so; the BetaTester build moves itself
 to a prefix of its own, the normal one never moves.
 
-## 9. Demo mode
-
-**Demo** mode lets you try Mate without a car and without an account: it starts with **a month of
-fake but realistic data**. You can activate it in two ways:
-
-- from the first-start wizard, with the **🧪 Try the demo** button;
-- or by starting the container with the variable `MATE_DEMO=1`.
-
-In demo: the data is openly fictitious (a **DEMO** badge), the commands are **simulated** (no car is
-contacted) and a banner at the top stays visible at all times with the button to **exit**. When you
-exit, Mate returns to the normal setup.
-
----
-
-## 10. Frequently asked questions and troubleshooting
+## 9. Frequently asked questions and troubleshooting
 
 **The car often goes "offline" / I keep seeing "Invalid token".**
 Almost always it's because the **same Leapmotor account is being used somewhere else** (the official
@@ -2197,7 +2172,7 @@ its `secret.key`**.
 
 ---
 
-## 11. Glossary
+## 10. Glossary
 
 - **SoC** (*State of Charge*) — the battery's percentage of charge.
 - **SoH** (*State of Health*) — the battery's state of health: capacity remaining compared to new.

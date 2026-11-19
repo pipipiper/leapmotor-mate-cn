@@ -450,8 +450,7 @@ document.getElementById('cn-energy-reload').onclick = async function () {
   </div>
 </div>
 
-{% if not demo %}
-<!-- Cloud insights: energy distribution + 6-week consumption trend (live cloud data; hidden in demo) -->
+<!-- Cloud insights: energy distribution + 6-week consumption trend (live cloud data) -->
 <!-- Totali da consegna (mileage/energy/detail → totalEnergy/totalmileage + guida/fermo) -->
 <div class="card mb-4" hx-get="api/cumulative-summary" hx-trigger="load" hx-swap="innerHTML">
   <div class="text-center py-4 text-slate-500 text-sm">{{ t('loading') }}…</div>
@@ -464,9 +463,8 @@ document.getElementById('cn-energy-reload').onclick = async function () {
     <div class="text-center py-4 text-slate-500 text-sm">{{ t('loading') }}…</div>
   </div>
 </div>
-{% endif %}
 
-{% if ec_periods and not demo %}
+{% if ec_periods %}
 <!-- Consumo di guida dall'ultima ricarica completata (cloud getEC, dato ufficiale) -->
 <div class="card mb-6" hx-get="api/energy-since-charge" hx-trigger="load" hx-swap="innerHTML">
   <div class="text-center py-4 text-slate-500 text-sm">{{ t('loading') }}…</div>

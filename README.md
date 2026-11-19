@@ -126,7 +126,6 @@ LeapMotor Mate is free and open-source, developed in my spare time. If it's usef
 - **Export** — **CSV** for trips and charges, **GPX** per trip, and a full **database backup** you can restore.
 
 **Setup and the rest**
-- **Demo mode** — the whole app on a realistic month of sample data — commutes, home and DC charging, costs, battery health — with **no car and no account**. One click on the welcome screen. *Nothing in it is real.*
 - **Nine languages** — English · Italiano · Français · Deutsch · Polski · Nederlands · Português · Español · Čeština.
 - **Currency and units** — 30 currencies, and **metric / imperial UK / imperial US**. Display only: what is stored stays metric, so you can switch back with nothing lost.
 - **Editable battery capacity** — pre-filled per model, editable if yours differs, or adopt the value Mate worked out **from your own charges**. Changing it never rewrites past charges. When a default Mate itself shipped has since been disproved by real charges, Settings says so and offers the corrected figure with one button — it never rewrites the number behind you.
@@ -159,14 +158,6 @@ The data lives in a local SQLite database. Nothing is sent anywhere except to th
 ---
 
 ## Installation
-
-> **▶️ Just want to see what Mate can do?** Try the **demo** first — a realistic month of sample data, **no car or account needed**. Install it (add‑on or Docker), open Mate and click **"Try the demo"** on the welcome screen — **no command line**. Or run it standalone:
->
-> ```bash
-> docker run --rm -p 4000:4000 -e MATE_DEMO=1 ghcr.io/protossblaster/leapmotor-mate
-> ```
->
-> Open <http://localhost:4000>. Everything in demo mode is **sample data — nothing is real**.
 
 ### Option A — Home Assistant add‑on
 
@@ -285,7 +276,7 @@ manual, for now, exists in these five.
 
 ## Setup wizard
 
-The first launch opens on a choice — **Set up my car** or **Try the demo**. Choosing *Set up my car* asks for one thing:
+The first launch asks for one thing:
 
 - **Login** — your Leapmotor account email, password and operation **PIN**. The wizard reads your **model** and VIN from the cloud. The **battery** it can only fill in by itself where the European version has a single variant (T03) — where there are several (B03X 39.0 / 52.0, B05 and B10 Pro / Pro Max, C10 RWD / AWD) you pick yours. Correctable at any time in Settings → Battery.
 
@@ -490,7 +481,6 @@ LeapMotor Mate è gratuito e open-source, sviluppato nel tempo libero. Se ti è 
 - **Esportazione** — **CSV** di viaggi e ricariche, **GPX** per viaggio, e un **backup completo del database** che puoi ripristinare.
 
 **Configurazione e tutto il resto**
-- **Modalità demo** — l'app intera su un mese realistico di dati di esempio — pendolarismo, ricariche di casa e in DC, costi, salute della batteria — **senza auto e senza account**. Un clic sulla schermata di benvenuto. *Niente di quello che vedi è reale.*
 - **Nove lingue** — Italiano · English · Français · Deutsch · Polski · Nederlands · Português · Español · Čeština.
 - **Valuta e unità** — 30 valute, e **metrico / imperiale UK / imperiale US**. Solo visualizzazione: quello che è salvato resta metrico, quindi torni indietro senza perdere niente.
 - **Capacità batteria modificabile** — precompilata per modello, modificabile se la tua è diversa, oppure prendi il valore che Mate ha ricavato **dalle tue ricariche**. Cambiarla non riscrive mai le ricariche passate.
@@ -518,14 +508,6 @@ I dati restano in un database SQLite locale. Nulla viene inviato altrove se non 
 2. **Niente da scaricare.** Il certificato TLS dell'app Leapmotor che serve a Mate per il login — *uguale per tutti*, identifica l'app, non te — è incluso in Mate e si installa da solo al primo avvio. Non ti viene mai chiesto.
 
 ## Installazione
-
-> **▶️ Vuoi solo vedere cosa sa fare Mate?** Prova prima la **demo** — un mese realistico di dati di esempio, **senza auto né account**. Installala (add‑on o Docker), apri Mate e clicca **"Prova la demo"** nella schermata di benvenuto — **niente riga di comando**. Oppure eseguila standalone:
->
-> ```bash
-> docker run --rm -p 4000:4000 -e MATE_DEMO=1 ghcr.io/protossblaster/leapmotor-mate
-> ```
->
-> Apri <http://localhost:4000>. In modalità demo è tutto **dati di esempio — niente è reale**.
 
 ### Opzione A — Add‑on Home Assistant
 
@@ -643,7 +625,7 @@ scritto, per ora, esiste in queste cinque.
 
 ## Wizard di setup
 
-Al primo avvio compare una scelta — **Configura la mia auto** o **Prova la demo**. Scegliendo *Configura la mia auto* ti chiede una cosa sola:
+Al primo avvio ti chiede una cosa sola:
 
 - **Login** — email account Leapmotor, password e **PIN** operativo. Il wizard legge dal cloud **modello** e VIN. La **batteria** riesce a metterla da solo soltanto dove la versione europea ha una variante unica (T03) — dove ce ne sono più d'una (B03X 39,0 / 52,0, B05 e B10 Pro / Pro Max, C10 RWD / AWD) la scegli tu. Si corregge quando vuoi da Impostazioni → Batteria.
 

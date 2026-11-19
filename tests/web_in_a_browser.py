@@ -72,7 +72,7 @@ def _spawn(data_dir, db_path):
     Returns (proc, url, log). Raises the last log if every attempt lost the race."""
     env = {**os.environ, "DB_PATH": str(db_path), "PYTHONPATH": str(ROOT / "web"),
            "MATE_RESEARCH": "0"}
-    for leak in ("MATE_AUTH_PASSWORD", "MATE_DEMO", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+    for leak in ("MATE_AUTH_PASSWORD", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
         env.pop(leak, None)
     log = data_dir / "web.log"
     for attempt in range(_PORT_ATTEMPTS):

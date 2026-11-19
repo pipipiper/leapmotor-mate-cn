@@ -100,7 +100,7 @@ def mate_url(tmp_path_factory):
            "PYTHONPATH": str(ROOT / "web"),
            "MATE_RESEARCH": "0"}
     # Never let the developer's own shell decide whether this test sees a login page.
-    for leak in ("MATE_AUTH_PASSWORD", "MATE_DEMO", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+    for leak in ("MATE_AUTH_PASSWORD", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
         env.pop(leak, None)
 
     # To a file, not a pipe: when the server is the thing that went wrong, its own output is the

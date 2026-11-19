@@ -100,7 +100,7 @@ def _env():
 
 def _render(**ctx):
     base = dict(trip=_trip(), t=lambda k, **kw: k, request=_Request(), page="trips",
-                version="test", demo=False, is_reev=True,
+                version="test", is_reev=True,
                 currency={"name": "Euro", "symbol": "€", "pos": "after", "dec": 2},
                 prev_trip_id=None, next_trip_id=None)
     base.update(ctx)
@@ -124,7 +124,7 @@ def test_the_running_cost_uses_the_same_denominator_as_statistics():
     env.globals["cost100_val"] = lambda v: v * 1.609344
     html = env.get_template("trip_detail.html").render(
         trip=_trip(), t=lambda k, **kw: k, request=_Request(), page="trips", version="test",
-        demo=False, is_reev=True, research=False,
+        is_reev=True, research=False,
         currency={"name": "Euro", "symbol": "€", "pos": "after", "dec": 2},
         prev_trip_id=None, next_trip_id=None)
     assert "/100 mi" in html, "the running cost ignores the reader's distance unit"

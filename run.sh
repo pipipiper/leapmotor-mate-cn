@@ -54,8 +54,8 @@ fi
 
 # ── Supervise / relaunch ─────────────────────────────────────────────────────
 # Mate's in-app toggles relaunch the app by exiting with code 42:
-#   • "Try the demo" / "Exit demo"   (web/main.py: _restart_container)
 #   • Leapmotor account switch        (poller/main.py: re-authenticate)
+#   • Database restore / factory reset (web/main.py: _restart_container)
 # We handle that relaunch HERE by re-exec'ing this script, so it works even with
 # NO container restart policy — the default for `docker run` and Docker Desktop
 # "Run". (Without this, the toggle just stops the container and looks "crashed".)
@@ -63,49 +63,24 @@ fi
 # (HA add-on / Docker restart policy) decide.
 RELAUNCH_CODE=42
 
-# The in-app demo flag lives next to the DB on the persistent volume; the "Try the
-# demo" button (and the in-demo exit banner) write/remove it. Re-read it on every
-# (re-)launch — so an "Exit demo" relaunch correctly drops back to normal mode.
-# MATE_DEMO / the demo DB path are passed only to the CHILDREN (not exported into
-# this shell), so re-exec re-derives the mode cleanly from the flag. An explicit
-# MATE_DEMO=1 (standalone) forces demo regardless of the flag.
-DEMO_ACTIVE=""
-if [ -n "${MATE_DEMO}" ] && [ "${MATE_DEMO}" != "0" ] && [ "${MATE_DEMO}" != "false" ]; then
-  DEMO_ACTIVE=1
-elif [ -f "$(dirname "${DB_PATH}")/demo.flag" ]; then
-  DEMO_ACTIVE=1
-fi
-
-if [ -n "${DEMO_ACTIVE}" ]; then
-  # Demo mode: bundled sample data, no account/cloud, web only.
-  echo "[LeapMotor Mate] DEMO MODE — generating sample data at /data/demo.db (no account, no cloud)"
-  if ! PYTHONPATH=/app/poller MATE_DEMO=1 DB_PATH=/data/demo.db python3 /app/poller/seed_demo.py; then
-    echo "[LeapMotor Mate] demo seed failed"; exit 1
-  fi
-  echo "[LeapMotor Mate] DEMO MODE — starting web only"
-  PYTHONPATH=/app/web MATE_DEMO=1 DB_PATH=/data/demo.db python3 /app/web/main.py &
-  WEB_PID=$!
-  PIDS="${WEB_PID}"
-else
-  echo "[LeapMotor Mate] Starting..."
-  echo "[LeapMotor Mate] DB: ${DB_PATH}"
-  echo "[LeapMotor Mate] Home Assistant API: $([ -n "${SUPERVISOR_TOKEN}" ] && echo "available (add-on mode)" || echo "not available (standalone)")"
-  # Prepare the installation (the Leapmotor app certificate and the common parameters, on a new
-  # /data) once, BEFORE the two services start: each of them prepares it again on import, and two
-  # processes creating the same lock file at the same instant are not kept apart on a Docker Desktop
-  # bind mount (macOS). Measured 07/11/2026: on an empty ./data the two installs collided and the
-  # container restarted for ever. A failure here does not stop Mate: each service then prepares it
-  # itself, as before, and the page shows the state.
-  PYTHONPATH=/app/web python3 -c 'import mate_api; from runtime_paths import prepare_installation; prepare_installation()' \
-    || echo "[LeapMotor Mate] Installation not prepared before start — the services will retry"
-  PYTHONPATH=/app/poller python3 /app/poller/main.py &
-  POLLER_PID=$!
-  echo "[LeapMotor Mate] Poller PID: ${POLLER_PID}"
-  PYTHONPATH=/app/web python3 /app/web/main.py &
-  WEB_PID=$!
-  echo "[LeapMotor Mate] Web PID: ${WEB_PID}"
-  PIDS="${POLLER_PID} ${WEB_PID}"
-fi
+echo "[LeapMotor Mate] Starting..."
+echo "[LeapMotor Mate] DB: ${DB_PATH}"
+echo "[LeapMotor Mate] Home Assistant API: $([ -n "${SUPERVISOR_TOKEN}" ] && echo "available (add-on mode)" || echo "not available (standalone)")"
+# Prepare the installation (the Leapmotor app certificate and the common parameters, on a new
+# /data) once, BEFORE the two services start: each of them prepares it again on import, and two
+# processes creating the same lock file at the same instant are not kept apart on a Docker Desktop
+# bind mount (macOS). Measured 07/11/2026: on an empty ./data the two installs collided and the
+# container restarted for ever. A failure here does not stop Mate: each service then prepares it
+# itself, as before, and the page shows the state.
+PYTHONPATH=/app/web python3 -c 'import mate_api; from runtime_paths import prepare_installation; prepare_installation()' \
+  || echo "[LeapMotor Mate] Installation not prepared before start — the services will retry"
+PYTHONPATH=/app/poller python3 /app/poller/main.py &
+POLLER_PID=$!
+echo "[LeapMotor Mate] Poller PID: ${POLLER_PID}"
+PYTHONPATH=/app/web python3 /app/web/main.py &
+WEB_PID=$!
+echo "[LeapMotor Mate] Web PID: ${WEB_PID}"
+PIDS="${POLLER_PID} ${WEB_PID}"
 
 # Wait for the first service to exit, then stop its sibling(s) and reap them.
 set +e
@@ -116,7 +91,7 @@ wait ${PIDS} 2>/dev/null
 set -e
 
 if [ "${EXIT_CODE}" = "${RELAUNCH_CODE}" ]; then
-  echo "[LeapMotor Mate] Relaunch requested (demo/account toggle) — restarting in-process"
+  echo "[LeapMotor Mate] Relaunch requested (account/database change) — restarting in-process"
   exec "$0"
 fi
 

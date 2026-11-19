@@ -28,7 +28,6 @@ poller pass their own get/set via `accessor=`). Accumulates across sessions.
 """
 from __future__ import annotations
 import json
-import os
 from typing import Callable, Optional
 
 # feature_key -> {label, kind, signals(status-signal ids whose live value proves a sensor works),
@@ -311,7 +310,7 @@ def command_shown(vin: str, command_key: str, get_setting: Optional[Callable] = 
     T03 — #144); otherwise mapped to its gating feature (COMMAND_FEATURE), and commands with neither
     are always shown."""
     from api_backend import is_china
-    if is_china() and os.environ.get("MATE_DEMO", "").lower() not in ("1", "true"):
+    if is_china():
         from cn_capabilities import stored_permission
         if get_setting is None:
             from cn_backend import get_setting

@@ -37,13 +37,9 @@ import update_check
 MATE_VERSION = "5.0.0"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
-import demo
 import ec_enrich
 import elevation_enrich
 import place_lookup
-
-_IS_DEMO = demo.is_demo()
-demo.install(command_client, ha_client)   # no-op unless MATE_DEMO is set
 
 
 def _add_file_log() -> None:
@@ -697,16 +693,15 @@ def _ctx(**kwargs):
     _unconfigured = db_reader.unconfigured_vehicles()
     _command_css = ""
     from ui_command_access import fan_top as _fan_top
-    if not _IS_DEMO:
-        from ui_command_access import hidden_controls_css
-        _vin = (_veh or {}).get("vin", "")
-        _command_css = hidden_controls_css(
-            _vin, db_reader.get_setting,
-            # One rule for the page, the injected CSS and Home Assistant: the cloud's data for
-            # this car plus what was measured on the model.
-            shown=lambda _name: capability_profile.command_shown(
-                _vin, _name, car_type=(_veh or {}).get("car_type", "")))
-    return {**kwargs, "api_v2_command_css": _command_css, "lang": lang, "t": t, "version": MATE_VERSION, "demo": _IS_DEMO,
+    from ui_command_access import hidden_controls_css
+    _vin = (_veh or {}).get("vin", "")
+    _command_css = hidden_controls_css(
+        _vin, db_reader.get_setting,
+        # One rule for the page, the injected CSS and Home Assistant: the cloud's data for
+        # this car plus what was measured on the model.
+        shown=lambda _name: capability_profile.command_shown(
+            _vin, _name, car_type=(_veh or {}).get("car_type", "")))
+    return {**kwargs, "api_v2_command_css": _command_css, "lang": lang, "t": t, "version": MATE_VERSION,
             "charge_phase_label": charge_phase_label,
             "poll_driving_default": db_reader.POLL_DRIVING_DEFAULT_S,
             "unconfigured_cars": ", ".join(
@@ -763,8 +758,6 @@ async def healthz():
     503 if the poller looks wedged/dead. The threshold is well past the 900s offline
     backoff so a deep-sleeping car never reads as unhealthy."""
     import time as _t
-    if _IS_DEMO:
-        return JSONResponse({"status": "demo"}, status_code=200)
     if not db_reader.is_setup_complete():
         return JSONResponse({"status": "awaiting_setup"}, status_code=200)
     try:
@@ -839,7 +832,7 @@ async def overview(request: Request):
         charge_limit=db_reader.configured_charge_limit((vehicle or {}).get("vin") or ""),
         car_resp=db_reader.command_responsiveness(),
         battery_price=db_reader.current_blended_price(),   # #200 — must match /api/status-card
-        data_link=None if _IS_DEMO else db_reader.data_link(status),   # demo runs no poller
+        data_link=db_reader.data_link(status),
     ))
 
 
@@ -2516,9 +2509,6 @@ async def vehicle_page(request: Request):
 
 @app.get("/api/vehicle-status", response_class=HTMLResponse)
 async def vehicle_status_api(request: Request):
-    if _IS_DEMO:
-        return templates.TemplateResponse(request, "partials/vehicle_status.html",
-                                          _ctx(vs=demo.vehicle_status(db_reader)))
     import asyncio
     vehicle, _ = db_reader.get_vehicle()
     signals = await asyncio.get_event_loop().run_in_executor(None, command_client.get_fresh_signals)
@@ -2530,8 +2520,7 @@ async def vehicle_status_api(request: Request):
 async def tyre_history_api(request: Request, days: str = "30"):
     """Each tyre's lowest and highest pressure per day, and the outside temperature's, for the chart
     under the tyres on the Vehicle page (D#483). 30 or 90 days, anything else is 30. The axis runs
-    from the first day with a reading to today, a day without one a hole (None), never a 0. Demo
-    mode shows no history: there is none to show, and none is invented."""
+    from the first day with a reading to today, a day without one a hole (None), never a 0."""
     from datetime import date, datetime, timedelta, timezone
     period = 90 if days == "90" else 30
     # Past the positions retention only charging rows are kept (prune_positions): a day built from
@@ -2541,7 +2530,7 @@ async def tyre_history_api(request: Request, days: str = "30"):
     except ValueError:
         retention = 0
     shown_days = min(period, retention) if retention > 0 else period
-    found = [] if _IS_DEMO else db_reader.get_tyre_pressure_days(shown_days)
+    found = db_reader.get_tyre_pressure_days(shown_days)
     chart = None
     if found:
         by_day = {d["day"]: d for d in found}
@@ -4371,8 +4360,6 @@ async def polling_card(request: Request):
 @app.get("/api/link-pill", response_class=HTMLResponse)
 async def link_pill(request: Request):
     """The data-link tile beside the Overview heading, on its own 30-second refresh."""
-    if _IS_DEMO:
-        return HTMLResponse("")            # demo runs no poller: a silent heartbeat is not an outage
     return templates.TemplateResponse(request, "partials/link_pill.html", _ctx(
         data_link=db_reader.data_link(db_reader.get_latest_status()),
     ))
@@ -5764,17 +5751,6 @@ async def run_command(name: str, request: Request, background_tasks: BackgroundT
         expected = {field: (not turning_off)}   # verify the tile actually flipped
         overrides = {}                          # never fake climate state in the DB
 
-    if _IS_DEMO:
-        # Demo mode: reflect the command in the demo's own state (reusing the
-        # optimistic overlay) and skip the cloud entirely — keeps the demo interactive.
-        if expected:
-            db_reader.write_optimistic_status(expected)
-        if name in _COMFORT_CMD_OPTIMISTIC:
-            _veh, _ = db_reader.get_vehicle()
-            _optimistic_comfort(_veh.get("vin") if _veh else None, _COMFORT_CMD_OPTIMISTIC[name])
-        return _cmd_response(request, payload={"ok": True, "status": "done"},
-                             html='<span data-ok="1" style="color:#22c55e">✓ Done</span>')
-
     import asyncio
     ok, msg = await asyncio.get_event_loop().run_in_executor(None, fn)
     if ok:
@@ -5824,39 +5800,11 @@ async def setup_page(request: Request):
 
 def _restart_container() -> None:
     """Ask run.sh to relaunch Mate by exiting with the agreed RELAUNCH code (42). run.sh
-    re-exec's itself in-process (re-reading the demo flag), so this works even with NO
-    container restart policy — standalone `docker run` / Docker Desktop "Run" don't set one
-    (with a policy / HA add-on it still relaunches cleanly). The poller uses the same code on
-    an account switch (poller/main.py). Delayed briefly so the HTTP response reaches the browser."""
+    re-exec's itself in-process, so this works even with NO container restart policy —
+    standalone `docker run` / Docker Desktop "Run" don't set one (with a policy / HA add-on it
+    still relaunches cleanly). The poller uses the same code on an account switch
+    (poller/main.py). Delayed briefly so the HTTP response reaches the browser."""
     threading.Timer(1.2, lambda: os._exit(42)).start()
-
-
-@app.post("/api/demo/enable")
-async def demo_enable():
-    """Enter demo mode from inside Mate (the setup screen's 'Try the demo' button), then
-    restart into it. Guarded to a not-yet-configured install and a non-demo process, so it
-    can never replace a real, set-up dashboard by accident."""
-    if _IS_DEMO or db_reader.is_setup_complete():
-        return JSONResponse({"ok": False, "restarting": False})
-    demo.set_flag(True)
-    _restart_container()
-    return JSONResponse({"ok": True, "restarting": True})
-
-
-@app.post("/api/demo/disable")
-async def demo_disable():
-    """Leave demo mode (the in-demo exit banner) and restart into the normal app."""
-    demo.set_flag(False)
-    _restart_container()
-    return JSONResponse({"ok": True, "restarting": True})
-
-
-@app.get("/api/demo/status")
-async def demo_status():
-    """Current mode of THIS process. The browser polls it after enable/disable to know the
-    container has come back in the target mode — robust regardless of how fast the restart is
-    (polling for an up/down transition can miss a sub-second restart)."""
-    return JSONResponse({"demo": _IS_DEMO})
 
 
 @app.post("/api/setup/sms/send")
@@ -5950,7 +5898,7 @@ async def cn_charge_statistics(mode: str = "7d", month: str = "", year: str = ""
     import time
     from api_backend import is_china
     from cn_backend import ChinaError
-    if _IS_DEMO or not is_china():
+    if not is_china():
         return JSONResponse({"error": "Unavailable"}, status_code=400)
     key = (mode or "7d", month or "", year or "")
     slot = _car_slot(_cn_charge_stats_cache)
@@ -5973,7 +5921,7 @@ async def cn_charge_details(date: str = "", month: str = "", refresh: int = 0):
     import time
     from api_backend import is_china
     from cn_backend import ChinaError
-    if _IS_DEMO or not is_china():
+    if not is_china():
         return JSONResponse({"error": "Unavailable"}, status_code=400)
     key = (date or "", month or "")
     slot = _car_slot(_cn_charge_details_cache)
@@ -5996,7 +5944,7 @@ async def cn_charge_sync():
     from cn_backend import ChinaError
     from cn_language import localize_error
     import history_worker
-    if _IS_DEMO or not is_china():
+    if not is_china():
         return JSONResponse({"error": "Unavailable"}, status_code=400)
     try:
         summary = await run_in_threadpool(history_worker.sync_once) or {}

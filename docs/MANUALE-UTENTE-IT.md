@@ -1051,9 +1051,8 @@ Sotto l'energia di un viaggio, l'etichetta che diceva **getEC** ora dice **Misur
    - [Navigazione](#navigazione) · [Veicolo](#veicolo) · [Wallbox](#wallbox)
 7. [Impostazioni](#7-impostazioni)
 8. [Le integrazioni in dettaglio (Wallbox, ABRP, MQTT)](#8-le-integrazioni-in-dettaglio)
-9. [Modalità demo](#9-modalità-demo)
-10. [Domande frequenti e risoluzione problemi](#10-domande-frequenti-e-risoluzione-problemi)
-11. [Glossario](#11-glossario)
+9. [Domande frequenti e risoluzione problemi](#9-domande-frequenti-e-risoluzione-problemi)
+10. [Glossario](#10-glossario)
 
 ---
 
@@ -1108,9 +1107,6 @@ Per configurare Mate ti servono tre cose:
 
 3. **Email, password e PIN operativo dell'auto.** Il **PIN a 4 cifre** è quello che usi anche
    nell'app ufficiale per autorizzare i comandi a distanza (chiusura, clima…).
-
-> 💡 Vuoi solo dare un'occhiata senza configurare niente? Salta tutto e usa la **[modalità demo](#9-modalità-demo)**:
-> Mate parte con un mese di dati finti realistici, senza auto e senza account.
 
 ---
 
@@ -1196,13 +1192,6 @@ premere dipende da come fai girare Mate.
 
 Al primo accesso Mate mostra un **wizard** (procedura guidata). In alto puoi scegliere la lingua
 (🇮🇹 Italiano). Poi:
-
-### Passo 0 — Scegli come iniziare
-
-Due pulsanti:
-
-- **▶ Configura la mia auto** — la configurazione vera e propria (continua sotto).
-- **🧪 Prova la demo** — entra in modalità dimostrativa con dati finti. Puoi uscire quando vuoi.
 
 ### Passo 1 — Accesso all'account
 
@@ -2209,21 +2198,7 @@ stessa auto, per Home Assistant sono **un solo dispositivo**: il secondo sembra 
 soprattutto **ogni comando parte due volte**. Mate ora se ne accorge e lo scrive; la versione
 BetaTester si sposta da sé su un prefisso suo, quella normale non si muove mai.
 
-## 9. Modalità demo
-
-La **demo** serve a provare Mate senza auto e senza account: parte con **un mese di dati finti ma
-realistici**. Puoi attivarla in due modi:
-
-- dal wizard di primo avvio, pulsante **🧪 Prova la demo**;
-- oppure avviando il container con la variabile `MATE_DEMO=1`.
-
-In demo: i dati sono dichiaratamente fittizi (badge **DEMO**), i comandi sono **simulati** (non
-viene contattata nessuna auto) e un banner in alto resta sempre visibile con il pulsante per
-**uscire**. Uscendo, Mate torna alla configurazione normale.
-
----
-
-## 10. Domande frequenti e risoluzione problemi
+## 9. Domande frequenti e risoluzione problemi
 
 **L'auto va spesso "offline" / vedo "Token non valido" di continuo.**
 Quasi sempre è perché lo **stesso account Leapmotor è usato altrove** (app ufficiale, un'altra
@@ -2317,7 +2292,7 @@ Da *Impostazioni → Esporta/backup* scarichi il database (e i CSV). Conserva il
 
 ---
 
-## 11. Glossario
+## 10. Glossario
 
 - **SoC** (*State of Charge*) — percentuale di carica della batteria.
 - **SoH** (*State of Health*) — stato di salute della batteria: capacità residua rispetto al nuovo.

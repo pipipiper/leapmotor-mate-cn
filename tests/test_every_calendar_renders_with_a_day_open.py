@@ -179,7 +179,7 @@ def test_the_grid_really_lands_inside_the_wrapper(tmp_path):
         out = env.get_template(name).render(
             calendar_html=f"<div>{MARK}</div>", t=lambda k, **kw: k,
             request=type("R", (), {"headers": {"x-ingress-path": ""}})(),
-            page=name[:-5], version="t", demo=False, total=1, unconfirmed=0, unconfirmed_id=0,
+            page=name[:-5], version="t", total=1, unconfirmed=0, unconfirmed_id=0,
             configured=True, is_reev=True, research=True,          # the gates, held open
             cal_year=2026, cal_month=8, cal_open_day=0, cal_years=[2026], highlight=0)
         assert MARK in out, f"{name}: the grid never reached the page"

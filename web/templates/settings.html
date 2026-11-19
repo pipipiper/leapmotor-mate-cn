@@ -118,9 +118,8 @@
        On Home Assistant and Docker Mate runs whether anyone is looking or not, so there is
        nothing here to decide. Mate stores the answer and NOTHING ELSE: the shell reads it back
        and does whatever its platform requires (a LaunchAgent on macOS, the registry on Windows),
-       so the same switch works on both without Mate knowing the difference. Hidden in the demo,
-       where the setting would be written to the sample database and lost. #}
-    {% if shell_version and not demo %}
+       so the same switch works on both without Mate knowing the difference. #}
+    {% if shell_version %}
     {% call scard('desktop', '🖥️ ' + t('desktop_section'), card_open.get('desktop')) %}
       <form hx-post="api/settings/desktop-autostart" hx-trigger="change"
             hx-target="#desktop-autostart-feedback" hx-swap="innerHTML">

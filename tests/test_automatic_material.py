@@ -138,7 +138,7 @@ def test_startup_automatically_provisions_existing_certificate_install(material,
     (material/mod.PARAMETERS).unlink()
     data=material if setting is None else tmp_path/'database'
     monkeypatch.setenv('DB_PATH',str(data/'mate.db'))
-    for name in ('DATA_CERT_DIR','CERT_DIR','MATE_APPLICATION_BUNDLE','MATE_DEMO'):
+    for name in ('DATA_CERT_DIR','CERT_DIR','MATE_APPLICATION_BUNDLE'):
         monkeypatch.delenv(name,raising=False)
     if setting:
         monkeypatch.setenv(setting,str(material/'certs'))
@@ -194,7 +194,7 @@ def test_fresh_startup_installs_the_build_material_without_asking(tmp_path,monke
     import runtime_paths
     from setup_readiness import readiness
     monkeypatch.setenv('DB_PATH',str(tmp_path/'mate.db'))
-    for name in ('DATA_CERT_DIR','CERT_DIR','MATE_APPLICATION_BUNDLE','MATE_DEMO'):
+    for name in ('DATA_CERT_DIR','CERT_DIR','MATE_APPLICATION_BUNDLE'):
         monkeypatch.delenv(name,raising=False)
     assert runtime_paths.prepare_installation()['automatic']
     assert readiness(tmp_path/'certs',parameters_directory=tmp_path/'api-v2-private')['state']=='ready'
@@ -206,7 +206,7 @@ def test_fresh_startup_with_damaged_build_material_still_serves_the_page(tmp_pat
     import runtime_paths
     monkeypatch.setattr(mod,'CERTIFICATE_SHA256',{'app.crt':'0'*64,'app.key':'0'*64},raising=False)
     monkeypatch.setenv('DB_PATH',str(tmp_path/'mate.db'))
-    for name in ('DATA_CERT_DIR','CERT_DIR','MATE_APPLICATION_BUNDLE','MATE_DEMO'):
+    for name in ('DATA_CERT_DIR','CERT_DIR','MATE_APPLICATION_BUNDLE'):
         monkeypatch.delenv(name,raising=False)
     assert runtime_paths.prepare_installation()['state']=='provisioning_required'
     assert not (tmp_path/'certs/app.crt').exists()
@@ -216,7 +216,6 @@ def test_explicit_bundle_remains_supported(material,tmp_path,monkeypatch):
     import runtime_paths
     monkeypatch.setenv('DB_PATH',str(tmp_path/'data/mate.db'))
     monkeypatch.setenv('MATE_APPLICATION_BUNDLE',str(material))
-    monkeypatch.delenv('MATE_DEMO',raising=False)
     result=runtime_paths.prepare_installation()
     assert result['state']=='application_material_migrated'
     assert (tmp_path/'data'/mod.PARAMETERS).read_bytes()==(material/mod.PARAMETERS).read_bytes()
@@ -229,8 +228,7 @@ def test_startup_uses_certificate_fallback_when_data_cert_dir_is_empty(material,
     monkeypatch.setenv('DB_PATH',str(data/'mate.db'))
     monkeypatch.setenv('DATA_CERT_DIR',str(data/'certs'))
     monkeypatch.setenv('CERT_DIR',str(material/'certs'))
-    for name in ('MATE_APPLICATION_BUNDLE','MATE_DEMO'):
-        monkeypatch.delenv(name,raising=False)
+    monkeypatch.delenv('MATE_APPLICATION_BUNDLE',raising=False)
     assert runtime_paths.prepare_installation()['automatic']
     assert readiness(material/'certs',parameters_directory=data/'api-v2-private')['present']
     assert (data/'certs/app.crt').read_bytes()==(material/'certs/app.crt').read_bytes()
