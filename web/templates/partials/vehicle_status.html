@@ -109,9 +109,6 @@
       {{ state_tile(mdi(IC_ROOF), t('win_sunshade'), vs.windows.sunshade, open_class='text-brand', pct=vs.windows.sunshade_pct,
                     open_word=t('shade_open_state'), closed_word=t('shade_closed_state')) }}
     </div>
-    {% if china_market() %}
-    <p class="mt-3 text-xs leading-relaxed text-slate-400">{{ t('cn_windows_hint') }}</p>
-    {% endif %}
   </div>
 
   <!-- Climate: A/C mode · fan level · recirculation (signals 3713 / 1941 / 1943, on-car validated 2026-06-20) -->
