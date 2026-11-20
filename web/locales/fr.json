@@ -1,5 +1,10 @@
 {
   "translations": {
+    "charge_live_title": "Recharge en direct",
+    "charge_live_telemetry": "Tension et courant",
+    "cn_charge_official_title": "Historique officiel des recharges",
+    "cn_charge_sync_local": "Synchroniser en local",
+    "charge_local_title": "Historique local et coûts",
     "command_accepted_unconfirmed": "Demande acceptée par le cloud ; exécution sur le véhicule pas encore confirmée",
     "reev_export_waiting": "Préparation du bundle complet. Les requêtes cloud peuvent prendre quelques minutes ; vous pouvez continuer à utiliser Mate.",
     "reev_export_busy": "Un bundle est déjà en préparation. Veuillez patienter puis réessayer.",

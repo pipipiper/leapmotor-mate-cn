@@ -1,49 +1,62 @@
-{% set is_charging = status and status.charging %}
-{% set is_complete = status and status.cable_connected and status.charge_completed and not is_charging %}
+{% set reading = status or {} %}
+{% set is_charging = reading.get('charging') %}
+{% set is_complete = reading.get('cable_connected') and reading.get('charge_completed') and not is_charging %}
+{% set phase = reading.get('charge_phase') %}
+{% set current = reading.get('charge_current_a') %}
+{% set voltage = reading.get('charge_voltage_v') %}
+{% set remaining = reading.get('remaining_charge_min') %}
+{% set soc = reading.get('soc') %}
+{% set connector = 'dc_charge' if reading.get('dc_gun_connected') else 'ac_charge' if reading.get('ac_port_mode') == 1 else none %}
 <span id="charging-state" data-session="{{ session.id if session else '' }}" hidden></span>
-<div class="flex items-center gap-2 mb-4">
-  <span class="text-xl">⚡</span>
-  <span class="font-semibold text-white">{{ t('charging_status') }}</span>
-  {% if is_charging %}
-  <span class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 animate-pulse">{{ t('live_badge') }}</span>
-  {% elif is_complete %}
-  <span class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full text-green-400 bg-green-400/10 border border-green-400/30">✅ {{ t('charge_complete') }}</span>
-  {% else %}
-  <span class="ml-auto text-xs text-slate-600">{{ charge_phase_label(status) }}</span>
-  {% endif %}
+<div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+  <h2 class="font-semibold text-white">{{ t('charge_live_title') }}</h2>
+  <span class="rounded-full px-2.5 py-1 text-xs font-medium
+    {% if phase == 'fault' %}bg-red-500/10 text-red-300
+    {% elif is_charging or is_complete %}bg-emerald-500/10 text-emerald-300
+    {% elif phase in ('deferred', 'paused') %}bg-amber-500/10 text-amber-300
+    {% else %}bg-slate-900 text-slate-300{% endif %}">
+    {% if is_charging %}{{ t('charging') }}{% if connector %} · {{ t(connector) }}{% endif %}
+    {% elif is_complete %}{{ t('charge_complete') }}
+    {% elif phase == 'charging' or reading.get('charging') is none %}{{ t('cn_phase_unknown') }}
+    {% else %}{{ charge_phase_label(reading) }}{% endif %}
+  </span>
 </div>
-
-<div class="text-slate-500 text-[10px] -mt-2 mb-3">{{ t('car_data_dc') }}</div>
-
-<div class="grid grid-cols-2 gap-3">
-  <div style="background:#0f172a;border-radius:8px;padding:10px 14px">
-    <div class="text-slate-500 text-xs mb-1">{{ t('power') }}</div>
-    <div class="font-bold {% if is_charging %}text-yellow-400{% else %}text-slate-600{% endif %}">
-      {% if is_charging %}{{ (status.charge_power_kw or 0)|dec(2) }} <span class="text-xs font-normal text-slate-400">kW</span>{% else %}—{% endif %}
-    </div>
+<dl class="grid grid-cols-3 gap-2 rounded-xl bg-slate-900/70 p-3 sm:gap-4">
+  <div>
+    <dt class="text-xs text-slate-400">{{ t('battery') }}</dt>
+    <dd class="mt-1 text-lg font-semibold text-white tabular-nums">{% if soc is not none %}{{ soc|dec(1) }}<span class="text-xs text-slate-400">%</span>{% else %}—{% endif %}</dd>
   </div>
-  <div style="background:#0f172a;border-radius:8px;padding:10px 14px">
-    <div class="text-slate-500 text-xs mb-1">{{ t('time_remaining') }}</div>
-    <div class="font-bold {% if is_charging %}text-white{% else %}text-slate-600{% endif %}">
-      {% if is_charging and status.remaining_charge_min %}
-        {% set h = (status.remaining_charge_min // 60)|int %}
-        {% set m = (status.remaining_charge_min % 60)|int %}
-        {% if h > 0 %}{{ h }}h {{ m }}m{% else %}{{ m }}m{% endif %}
-        {% set finish = charge_finish(status) %}
-        {% if finish %}<div class="text-xs font-normal text-slate-400">{{ t('charge_ends_at').format(time=finish) }}</div>{% endif %}
+  <div>
+    <dt class="text-xs text-slate-400">{{ t('power') }}</dt>
+    <dd class="mt-1 text-lg font-semibold text-white tabular-nums">
+      {% if is_charging and current is not none and voltage is not none and reading.get('charge_power_kw') is not none %}
+      {{ reading.charge_power_kw|dec(2) }} <span class="text-xs text-slate-400">kW</span>
       {% else %}—{% endif %}
-    </div>
+    </dd>
   </div>
-  <div style="background:#0f172a;border-radius:8px;padding:10px 14px">
-    <div class="text-slate-500 text-xs mb-1">{{ t('current_a') }}</div>
-    <div class="font-bold {% if is_charging %}text-white{% else %}text-slate-600{% endif %}">
-      {% if is_charging and status.charge_current_a %}{{ status.charge_current_a|abs|dec(1) }} <span class="text-xs font-normal text-slate-400">A</span>{% else %}—{% endif %}
-    </div>
+  <div>
+    <dt class="text-xs text-slate-400">{{ t('time_remaining') }}</dt>
+    <dd class="mt-1 text-lg font-semibold text-white tabular-nums">
+      {% if is_charging and remaining and remaining > 0 %}
+      {{ fmt_dur(remaining) }}
+      {% set finish = charge_finish(reading) %}
+      {% if finish %}<div class="text-xs font-normal text-slate-400">{{ t('charge_ends_at').format(time=finish) }}</div>{% endif %}
+      {% else %}—{% endif %}
+    </dd>
   </div>
-  <div style="background:#0f172a;border-radius:8px;padding:10px 14px">
-    <div class="text-slate-500 text-xs mb-1">{{ t('voltage') }}</div>
-    <div class="font-bold {% if is_charging %}text-white{% else %}text-slate-600{% endif %}">
-      {% if is_charging and status.charge_voltage_v %}{{ status.charge_voltage_v|dec(1) }} <span class="text-xs font-normal text-slate-400">V</span>{% else %}—{% endif %}
+</dl>
+{% if is_charging or phase == 'paused' %}
+<details id="charging-live-details" class="mt-3 text-sm text-slate-300">
+  <summary class="cursor-pointer py-1">{{ t('charge_live_telemetry') }}</summary>
+  <dl class="mt-2 grid grid-cols-2 gap-2">
+    <div class="rounded-lg bg-slate-900/70 px-3 py-2">
+      <dt class="text-xs text-slate-400">{{ t('current_a') }}</dt>
+      <dd class="font-medium text-white">{% if current is not none %}{{ current|abs|dec(1) }} A{% else %}—{% endif %}</dd>
     </div>
-  </div>
-</div>
+    <div class="rounded-lg bg-slate-900/70 px-3 py-2">
+      <dt class="text-xs text-slate-400">{{ t('voltage') }}</dt>
+      <dd class="font-medium text-white">{% if voltage is not none %}{{ voltage|dec(1) }} V{% else %}—{% endif %}</dd>
+    </div>
+  </dl>
+</details>
+{% endif %}

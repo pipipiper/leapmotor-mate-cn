@@ -415,7 +415,8 @@ def ensure_schema(conn) -> None:
         _add_column(conn, "ALTER TABLE positions ADD COLUMN remaining_charge_min INTEGER DEFAULT NULL")
     if "charge_voltage_v" not in cols:
         _add_column(conn, "ALTER TABLE positions ADD COLUMN charge_voltage_v REAL DEFAULT NULL")
-    for name, sql_type in (("cn_charge_state", "INTEGER"), ("market", "TEXT"), ("collect_time_ms", "REAL")):
+    for name, sql_type in (("cn_charge_state", "INTEGER"), ("market", "TEXT"),
+                           ("collect_time_ms", "REAL"), ("dc_gun_connected", "INTEGER")):
         if name not in cols:
             _add_column(conn, f"ALTER TABLE positions ADD COLUMN {name} {sql_type} DEFAULT NULL")
     if "charge_current_a" not in cols:

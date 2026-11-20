@@ -3,14 +3,107 @@ import json
 import sqlite3
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import mate_api  # noqa: F401
 import db as mate_db
 import db_reader
+from cn_telemetry import decode_status
 import history_worker as worker
 import migrate_cloud_charges as charge_migrator
-from test_cn_adapter import api, vehicle  # noqa: F401
+from test_cn_adapter import api, raw, vehicle  # noqa: F401
+from test_cn_language import cn_web  # noqa: F401
+from web_in_a_browser import chromium
+
+
+@pytest.mark.parametrize('code,port,expected', [
+    (1, {'1197': 1}, '充电中 · 直流'),
+    (1, {'47': 1}, '充电中 · 交流'),
+    (2, {}, '充电已停止'),
+    (3, {}, '充电故障'),
+    (4, {}, '等待预约充电'),
+    (6, {}, '充电暂停'),
+    (None, {}, '充电状态未知'),
+])
+def test_cn_live_charge_displays_reported_state_and_connector(cn_web, code, port, expected):
+    client, database = cn_web
+    car = vehicle()
+    vehicle_id = database.ensure_vehicle(car.vin, 'B05', 2026)
+    database.set_setting('setup_complete', '1')
+    frame = decode_status(raw(**{'1149': code, '1177': None, **port}), car)
+    database.save_position(vehicle_id, frame.data)
+
+    response = client.get('/api/charging-live')
+    assert response.status_code == 200
+    assert expected in response.text
+    assert '0.00' not in response.text
+
+
+def test_cn_charge_view_restores_the_selected_date_and_ignores_old_periods(cn_web):
+    sync_api = pytest.importorskip('playwright.sync_api')
+    client, database = cn_web
+    database.ensure_vehicle('SYNTHETIC-B05', 'B05', 2026)
+    database.set_setting('setup_complete', '1')
+    old_requests = []
+    hold_week = False
+    opened_dates = []
+
+    def stats(period, energy, *dates):
+        return {'today': '2026-11-20', 'valid_start': '2026-01-01', 'period': period,
+                'total_energy_kwh': energy, 'total_count': 2, 'fast_charge_percent': 50,
+                'series': [{'date': day, 'label': day.split('-')[-1], 'energy_kwh': 2} for day in dates]}
+
+    def serve(route):
+        request = route.request
+        parsed = urlsplit(request.url)
+        if parsed.hostname != 'mate-cn.test':
+            return route.abort()
+        query = parse_qs(parsed.query)
+        if parsed.path == '/api/cn/charges/statistics':
+            mode = query['mode'][0]
+            if mode == '7d' and hold_week:
+                old_requests.append(route)
+                return
+            if mode == 'year':
+                return route.fulfill(json=stats('2026', 48, '2026-10'))
+            return route.fulfill(json=stats('2026-11', 12, '2026-11-13', '2026-11-19'))
+        if parsed.path == '/api/cn/charges/details':
+            opened_dates.append(query)
+            return route.fulfill(json={'items': []})
+        if parsed.path == '/api/cn/charges/sync':
+            return route.fulfill(json={'inserted': 1})
+        response = client.request(request.method, parsed.path + ('?' + parsed.query if parsed.query else ''))
+        route.fulfill(status=response.status_code, headers=dict(response.headers), body=response.content)
+
+    playwright, browser = chromium(sync_api)
+    try:
+        page = browser.new_page(viewport={'width': 390, 'height': 900})
+        page.route('**/*', serve)
+        page.goto('http://mate-cn.test/charges?month=2026-10&official_mode=month'
+                  '&official_period=2026-11&official_date=2026-11-13')
+        sync_api.expect(page.locator('#cn-charge-details-target')).to_have_text('2026/11/13')
+        with page.expect_navigation():
+            page.locator('#cn-charge-sync-btn').click()
+        sync_api.expect(page.locator('#cn-charge-details-target')).to_have_text('2026/11/13')
+        assert opened_dates.count({'date': ['2026-11-13']}) == 2
+        assert parse_qs(urlsplit(page.url).query)['month'] == ['2026-10']
+
+        hold_week = True
+        with page.expect_request('**/api/cn/charges/statistics?mode=7d'):
+            page.locator('[data-cn-mode="7d"]').click()
+        sync_api.expect(page.locator('#cn-cs-energy')).to_have_text('—')
+        page.locator('[data-cn-mode="year"]').click()
+        sync_api.expect(page.locator('#cn-cs-energy')).to_have_text('48.0')
+        with page.expect_response('**/api/cn/charges/statistics?mode=7d') as late:
+            old_requests.pop().fulfill(json=stats('2026-11-20', 999, '2026-11-20'))
+        late.value.finished()
+        page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+        sync_api.expect(page.locator('#cn-cs-energy')).to_have_text('48.0')
+        sync_api.expect(page.locator('#cn-charge-details-target')).to_have_text('2026年10月')
+    finally:
+        browser.close()
+        playwright.stop()
 
 
 def test_cn_charge_endpoints_use_carownerservice_charge_json_post(api):

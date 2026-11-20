@@ -1,5 +1,10 @@
 {
   "translations": {
+    "charge_live_title": "Live laadstatus",
+    "charge_live_telemetry": "Spanning en stroom",
+    "cn_charge_official_title": "Officiële laadgeschiedenis",
+    "cn_charge_sync_local": "Lokaal synchroniseren",
+    "charge_local_title": "Lokale geschiedenis en kosten",
     "command_accepted_unconfirmed": "Verzoek geaccepteerd door de cloud; uitvoering op de auto nog niet bevestigd",
     "reev_export_waiting": "Het volledige pakket wordt voorbereid. Cloudverzoeken kunnen enkele minuten duren; je kunt Mate blijven gebruiken.",
     "reev_export_busy": "Er wordt al een pakket voorbereid. Wacht en probeer het opnieuw.",

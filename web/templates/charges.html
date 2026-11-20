@@ -9,67 +9,18 @@
   <div>
     {% if back_link %}<a href="{{ back_link.href }}" class="text-slate-400 hover:text-white text-sm">{{ t(back_link.label) }}</a>{% endif %}
     <h1 class="text-2xl font-bold text-white">{{ t('charges_title') }}</h1>
-    <p class="text-slate-400 text-sm mt-1">{{ total }} {{ t('sessions_recorded') }}</p>
   </div>
-  {% if total or china_market() %}
-  <div class="shrink-0 flex items-center gap-2 flex-wrap justify-end">
-    {% if china_market() %}
-    <button type="button" id="cn-charge-sync-btn"
-            class="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer">
-      <span>☁️</span>
-      <span>{{ t('cn_charge_sync_btn') }}</span>
-    </button>
-    <span id="cn-charge-sync-status" class="text-xs text-slate-400"></span>
-    {% endif %}
-    {% if total %}
-    <a href="api/export/charges.csv" download
-       class="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 hover:border-brand/50 transition-all">
-      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
-      {{ t('export_csv') }}
-    </a>
-    {% endif %}
-  </div>
-  {% endif %}
 </div>
-
-{% if unconfirmed %}
-{# The banner takes you TO the charge. It used to only announce it, leaving the reader to guess
-   which day of the calendar to click — which is what #240 was actually about. It keeps the page's "←". #}
-<a href="charges{% if unconfirmed_id %}?highlight={{ unconfirmed_id }}{% endif %}{% if back_link %}{{ '&' if unconfirmed_id else '?' }}back={{ back_link.href|urlencode }}{% endif %}"
-   class="mb-6 flex items-center gap-2 rounded-xl px-4 py-3 text-sm hover:brightness-125 transition-all"
-   style="background:#f59e0b14;border:1px solid #f59e0b44;color:#fbbf24">
-  <span>❓</span>
-  <span><b>{{ unconfirmed }}</b> {{ t('charge_to_confirm_one') if unconfirmed == 1 else t('charges_to_confirm') }}</span>
-  {% if unconfirmed_id %}<span class="ml-auto text-xs">→</span>{% endif %}
-</a>
-{% endif %}
-
-{% if station %}
-<div class="mb-6 flex items-center justify-between gap-3 flex-wrap rounded-xl px-4 py-3 text-sm"
-     style="background:#f59e0b14;border:1px solid #f59e0b44">
-  <div class="flex items-center gap-2 text-amber-300">
-    <span>📍</span>
-    <span>{{ t('charges_station_filter') }}
-      <b>{{ station_info.name if station_info and station_info.name else t('map_unnamed_station') }}</b>
-      {% if station_info %}
-      — {{ station_info.sessions }} {{ t('sessions_recorded') }} · {{ station_info.kwh | nice }} kWh
-      {% if station_info.cost is not none %}· {{ station_info.cost | money }}{% endif %}
-      {% endif %}
-    </span>
-  </div>
-  <a href="charges{% if back_link %}?back={{ back_link.href|urlencode }}{% endif %}" class="text-xs font-medium text-amber-300 hover:text-amber-200 underline underline-offset-2">
-    ✕ {{ t('charges_station_clear') }}
-  </a>
-</div>
-{% endif %}
 
 <!-- Charging status + battery + limit panel -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+<section class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6" aria-label="{{ t('charge_live_title') }}">
 
   <!-- Live charging status -->
-  <div id="charging-live-panel" class="card"
+  <div id="charging-live-panel" class="card lg:col-span-2"
        hx-get="api/charging-live"
        hx-trigger="every 30s"
+       hx-on::before-swap="this.dataset.telemetryOpen = !!this.querySelector('details[open]')"
+       hx-on::after-swap="const details = this.querySelector('details'); if (details) details.open = this.dataset.telemetryOpen === 'true'"
        hx-swap="innerHTML">
     {% include "partials/charging_live.html" %}
   </div>
@@ -141,7 +92,7 @@
     {% endif %}
   </div>
 
-</div>
+</section>
 
 <script>
 // Fetch current charge limit on page load and update badge + input + battery-bar marker.
@@ -165,6 +116,14 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
 
 {% if china_market() %}
 <section id="cn-charge-stats-card" class="card mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h2 class="font-semibold text-white">{{ t('cn_charge_official_title') }}</h2>
+    <button type="button" id="cn-charge-sync-btn"
+            class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50">
+      {{ t('cn_charge_sync_local') }}
+    </button>
+    <span id="cn-charge-sync-status" class="w-full text-xs text-slate-400 empty:hidden" role="status"></span>
+  </div>
   <div class="grid grid-cols-3 rounded-xl border border-slate-700/80 bg-slate-900/80 p-1 text-xs mb-4">
     <button type="button" data-cn-mode="7d"
             class="cn-charge-tab px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer bg-slate-800 text-white shadow-sm">
@@ -309,12 +268,16 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
     typeUnknown: {{ t('cn_charge_type_unknown')|tojson }}
   };
 
-  var mode = '7d';
+  var address = new URL(location.href);
+  var mode = address.searchParams.get('official_mode');
+  if (mode !== 'month' && mode !== 'year') mode = '7d';
   var currentSeries = [];
-  var selectedKey = '';
-  var monthAll = false;
+  var selectedKey = address.searchParams.get('official_date') || '';
+  var monthAll = mode === 'month' && selectedKey === 'all';
+  if (monthAll) selectedKey = '';
   var lastToday = {{ (cn_today.isoformat() if cn_today is defined else '2026-11-19')|tojson }};
   var lastValidStart = '';
+  var statsSeq = 0;
   var detailsSeq = 0;
 
   var periodLabelEl = document.getElementById('cn-charge-period-label');
@@ -332,6 +295,17 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
   var monthAllBtn = document.getElementById('cn-charge-month-all');
   var detailsListEl = document.getElementById('cn-charge-details-list');
   var tabs = card.querySelectorAll('.cn-charge-tab');
+
+  function rememberView() {
+    var url = new URL(location.href);
+    url.searchParams.set('official_mode', mode);
+    var period = mode === 'month' ? monthSelect.value : mode === 'year' ? yearSelect.value : '';
+    if (period) url.searchParams.set('official_period', period);
+    else url.searchParams.delete('official_period');
+    if (monthAll || selectedKey) url.searchParams.set('official_date', monthAll ? 'all' : selectedKey);
+    else url.searchParams.delete('official_date');
+    history.replaceState(history.state, '', url);
+  }
 
   function fmtKwh(v) {
     var n = Number(v || 0);
@@ -406,6 +380,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
         : 'border-slate-600 text-slate-300 hover:border-emerald-500/60 hover:text-emerald-300');
     tabs.forEach(function (btn) {
       var active = btn.getAttribute('data-cn-mode') === mode;
+      btn.setAttribute('aria-pressed', String(active));
       btn.className = 'cn-charge-tab px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ' +
         (active ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white');
     });
@@ -511,7 +486,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
       try { chartEl._c.destroy(); } catch (e) {}
       chartEl._c = null;
     }
-    if (typeof ApexCharts === 'undefined') return;
+    if (!series.length || typeof ApexCharts === 'undefined') return;
     var selectedIdx = series.findIndex(function (item) { return item.date === selectedKey; });
     var containerW = scrollEl.clientWidth || 320;
     if (mode === 'month') {
@@ -583,6 +558,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
             var picked = currentSeries[idx];
             monthAll = false;
             selectedKey = picked.date;
+            rememberView();
             syncPickers();
             renderChart(currentSeries);
             if (mode === 'year') {
@@ -638,6 +614,14 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
   }
 
   async function loadStats(forceRefresh) {
+    var seq = ++statsSeq;
+    ++detailsSeq;
+    currentSeries = [];
+    renderChart(currentSeries);
+    energyEl.textContent = countEl.textContent = fastEl.textContent = '—';
+    detailsTargetEl.textContent = '';
+    renderDetailsEmpty(I18N.detailLoading, false);
+    monthAllBtn.disabled = true;
     statusEl.textContent = I18N.loading;
     statusEl.className = 'text-xs text-slate-400';
     var params = new URLSearchParams({ mode: mode });
@@ -647,6 +631,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
     try {
       var res = await fetch('api/cn/charges/statistics?' + params.toString());
       var data = await res.json();
+      if (seq !== statsSeq) return;
       if (!res.ok) throw new Error(data.error || I18N.unavailable);
       if (data.today) lastToday = data.today;
       if (data.valid_start) lastValidStart = data.valid_start;
@@ -666,11 +651,13 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
 
       if (mode === 'month' && monthAll) {
         selectedKey = '';
+        rememberView();
         renderChart(currentSeries);
         loadDetails({ month: monthSelect.value, refresh: forceRefresh });
       } else {
         var stillValid = currentSeries.some(function (item) { return item.date === selectedKey; });
         if (!stillValid) selectedKey = pickInitialBar(currentSeries);
+        rememberView();
         renderChart(currentSeries);
         if (selectedKey) {
           if (mode === 'year') {
@@ -683,9 +670,12 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
           renderDetailsEmpty(I18N.detailEmpty, false);
         }
       }
+      monthAllBtn.disabled = false;
     } catch (err) {
+      if (seq !== statsSeq) return;
       statusEl.textContent = err && err.message ? err.message : I18N.unavailable;
       statusEl.className = 'text-xs text-red-400';
+      renderDetailsEmpty('—', false);
     }
   }
 
@@ -693,10 +683,13 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
 
   tabs.forEach(function (btn) {
     btn.addEventListener('click', function () {
-      mode = btn.getAttribute('data-cn-mode');
+      var nextMode = btn.getAttribute('data-cn-mode');
+      if (nextMode === mode) return;
+      mode = nextMode;
       selectedKey = '';
       monthAll = false;
       syncPickers();
+      rememberView();
       loadStats(false);
     });
   });
@@ -705,6 +698,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
       selectedKey = '';
       monthAll = false;
       syncPickers();
+      rememberView();
       loadStats(false);
     }
   });
@@ -712,6 +706,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
     if (mode === 'year') {
       selectedKey = '';
       syncPickers();
+      rememberView();
       loadStats(false);
     }
   });
@@ -734,13 +729,69 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
         renderDetailsEmpty(I18N.detailEmpty, false);
       }
     }
+    rememberView();
   });
   refreshBtn.addEventListener('click', function () { loadStats(true); });
   rebuildPickers(lastToday, lastValidStart);
+  var savedPeriod = address.searchParams.get('official_period') || '';
+  var savedPicker = mode === 'month' ? monthSelect : yearSelect;
+  if ((mode === 'month' && /^20\d{2}-(0[1-9]|1[0-2])$/.test(savedPeriod)) ||
+      (mode === 'year' && /^20\d{2}$/.test(savedPeriod))) {
+    if (!Array.from(savedPicker.options).some(function (option) { return option.value === savedPeriod; })) {
+      savedPicker.add(new Option(mode === 'month' ? fmtMonth(savedPeriod) : fmtYear(savedPeriod), savedPeriod));
+    }
+    savedPicker.value = savedPeriod;
+  }
   syncPickers();
   loadStats(false);
 })();
 </script>
+{% endif %}
+
+<section aria-labelledby="local-charge-title">
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+  <div>
+    <h2 id="local-charge-title" class="font-semibold text-white">{{ t('charge_local_title') }}</h2>
+    <p class="text-slate-400 text-sm mt-1">{{ total }} {{ t('sessions_recorded') }}</p>
+  </div>
+  {% if total %}
+    <a href="api/export/charges.csv" download
+       class="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 hover:border-brand/50 transition-all">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+      {{ t('export_csv') }}
+    </a>
+  {% endif %}
+</div>
+
+{% if unconfirmed %}
+{# The banner takes you TO the charge. It used to only announce it, leaving the reader to guess
+   which day of the calendar to click — which is what #240 was actually about. It keeps the page's "←". #}
+<a href="charges{% if unconfirmed_id %}?highlight={{ unconfirmed_id }}{% endif %}{% if back_link %}{{ '&' if unconfirmed_id else '?' }}back={{ back_link.href|urlencode }}{% endif %}"
+   class="mb-6 flex items-center gap-2 rounded-xl px-4 py-3 text-sm hover:brightness-125 transition-all"
+   style="background:#f59e0b14;border:1px solid #f59e0b44;color:#fbbf24">
+  <span>❓</span>
+  <span><b>{{ unconfirmed }}</b> {{ t('charge_to_confirm_one') if unconfirmed == 1 else t('charges_to_confirm') }}</span>
+  {% if unconfirmed_id %}<span class="ml-auto text-xs">→</span>{% endif %}
+</a>
+{% endif %}
+
+{% if station %}
+<div class="mb-6 flex items-center justify-between gap-3 flex-wrap rounded-xl px-4 py-3 text-sm"
+     style="background:#f59e0b14;border:1px solid #f59e0b44">
+  <div class="flex items-center gap-2 text-amber-300">
+    <span>📍</span>
+    <span>{{ t('charges_station_filter') }}
+      <b>{{ station_info.name if station_info and station_info.name else t('map_unnamed_station') }}</b>
+      {% if station_info %}
+      — {{ station_info.sessions }} {{ t('sessions_recorded') }} · {{ station_info.kwh | nice }} kWh
+      {% if station_info.cost is not none %}· {{ station_info.cost | money }}{% endif %}
+      {% endif %}
+    </span>
+  </div>
+  <a href="charges{% if back_link %}?back={{ back_link.href|urlencode }}{% endif %}" class="text-xs font-medium text-amber-300 hover:text-amber-200 underline underline-offset-2">
+    ✕ {{ t('charges_station_clear') }}
+  </a>
+</div>
 {% endif %}
 
 <!-- AC vs DC distribution, and Home vs Public (a second, independent split of the SAME charges,
@@ -1125,6 +1176,8 @@ document.addEventListener('DOMContentLoaded', () => lmReloadWhenOver('charging-l
   return m ? m.dataset.session : null;
 }));
 </script>
+
+</section>
 
 <!-- Charge merge preview modal (filled by the 🔗 button on a card) -->
 <div id="charge-merge-modal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(2,6,23,.72);align-items:center;justify-content:center;padding:16px"

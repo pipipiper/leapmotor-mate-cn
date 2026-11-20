@@ -1,5 +1,10 @@
 {
   "translations": {
+    "charge_live_title": "Živé nabíjení",
+    "charge_live_telemetry": "Napětí a proud",
+    "cn_charge_official_title": "Oficiální historie nabíjení",
+    "cn_charge_sync_local": "Synchronizovat místně",
+    "charge_local_title": "Místní historie a náklady",
     "command_accepted_unconfirmed": "Požadavek přijat cloudem; provedení ve vozidle zatím nebylo potvrzeno",
     "reev_export_waiting": "Připravuje se kompletní balíček. Požadavky na cloud mohou trvat několik minut; Mate můžete mezitím dál používat.",
     "reev_export_busy": "Balíček se již připravuje. Počkejte prosím a zkuste to znovu.",

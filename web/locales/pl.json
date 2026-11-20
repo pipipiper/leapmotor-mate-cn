@@ -1,5 +1,10 @@
 {
   "translations": {
+    "charge_live_title": "Ładowanie na żywo",
+    "charge_live_telemetry": "Napięcie i natężenie",
+    "cn_charge_official_title": "Oficjalna historia ładowania",
+    "cn_charge_sync_local": "Synchronizuj lokalnie",
+    "charge_local_title": "Lokalna historia i koszty",
     "command_accepted_unconfirmed": "Żądanie zaakceptowane przez chmurę; wykonanie w pojeździe nie zostało jeszcze potwierdzone",
     "reev_export_waiting": "Przygotowywanie pełnego pakietu. Zapytania do chmury mogą potrwać kilka minut; możesz nadal korzystać z Mate.",
     "reev_export_busy": "Pakiet jest już przygotowywany. Poczekaj i spróbuj ponownie.",

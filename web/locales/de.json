@@ -1,5 +1,10 @@
 {
   "translations": {
+    "charge_live_title": "Live-Ladestatus",
+    "charge_live_telemetry": "Spannung und Strom",
+    "cn_charge_official_title": "Offizieller Ladeverlauf",
+    "cn_charge_sync_local": "Lokal synchronisieren",
+    "charge_local_title": "Lokaler Verlauf und Kosten",
     "command_accepted_unconfirmed": "Anfrage von der Cloud angenommen; Ausführung am Fahrzeug noch nicht bestätigt",
     "reev_export_waiting": "Das vollständige Datenpaket wird vorbereitet. Cloud-Abfragen können einige Minuten dauern; Mate bleibt bedienbar.",
     "reev_export_busy": "Ein Datenpaket wird bereits vorbereitet. Bitte warten und erneut versuchen.",

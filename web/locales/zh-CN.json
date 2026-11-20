@@ -1,5 +1,10 @@
 {
   "translations": {
+    "charge_live_title": "实时充电",
+    "charge_live_telemetry": "电压和电流",
+    "cn_charge_official_title": "官方充电记录",
+    "cn_charge_sync_local": "同步到本地",
+    "charge_local_title": "本地记录与费用",
     "command_accepted_unconfirmed": "云端已受理；尚未确认车辆实际执行。",
     "reev_export_waiting": "正在准备完整数据包。云端读取可能需要几分钟，期间仍可使用 Mate。",
     "reev_export_busy": "已有数据包正在准备，请稍后重试。",

@@ -1,7 +1,7 @@
 {# The charge in progress, among the cards at the top of the Charges page: the chart a finished charge
    gets, redrawn with every poll of the panel. `live` is None while no charge runs, and the panel stays empty. #}
 {% if live %}
-<div class="card order-3 lg:order-last lg:col-span-3">
+<div class="card order-3 lg:order-last lg:col-span-4">
   <div class="flex items-center gap-2 mb-1">
     <span class="text-xl">📈</span>
     <span class="font-semibold text-white">{{ t('charge_profile') }}</span>
