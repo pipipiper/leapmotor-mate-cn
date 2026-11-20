@@ -10,6 +10,7 @@ import math
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
@@ -5549,6 +5550,8 @@ _SLOW_COMMANDS = {"open_sunshade", "close_sunshade", "open_trunk", "close_trunk"
 # it — so command #1's eventual timeout can never clear command #2's optimistic overlay
 # (GitHub #34).
 _command_epoch = 0
+_command_receipts: dict[str, dict] = {}
+_COMMAND_VERIFY_S = 30
 
 
 def _cmd_error_html(msg: str) -> str:
@@ -5586,7 +5589,7 @@ def _command_confirmed(expected: dict, signals: dict) -> bool:
 
 
 def _post_command_refresh(expected: dict, epoch: int, delay: int = 3, deadline_s: int = 30,
-                          vin: str | None = None):
+                          vin: str | None = None, receipt: dict | None = None):
     """Verify a command against the car, polling until it confirms or we give up.
 
     The Leapmotor cloud often hasn't ingested the new state a few seconds after a
@@ -5604,9 +5607,21 @@ def _post_command_refresh(expected: dict, epoch: int, delay: int = 3, deadline_s
     start = time.time()
     time.sleep(delay)
     while True:
-        if _command_epoch != epoch:          # a newer command owns the state now
+        if _command_epoch != epoch or (receipt is not None and time.monotonic() >= receipt["deadline"]):
             return
         signals = command_client.get_fresh_signals(vin)
+        if receipt is not None:
+            if _command_epoch != epoch or time.monotonic() >= receipt["deadline"]:
+                return
+            snapshot = getattr(signals, "snapshot", None)
+            if (snapshot is not None and snapshot.data.vin.lower() == vin.lower()
+                    and receipt["after_ms"] < snapshot.data.timestamp_ms <= time.time() * 1000 + 1000
+                    and _command_confirmed(expected, signals)):
+                receipt["confirmed"] = True
+                db_reader.save_fresh_signals(signals, vin)
+                return
+            time.sleep(4)
+            continue
         if signals and _command_confirmed(expected, signals):
             db_reader.save_fresh_signals(signals, vin)     # truth matches the expectation
             return
@@ -5662,6 +5677,18 @@ def _cmd_response(request: Request, *, html: str, payload: dict, status: int = 2
     return HTMLResponse(html, status_code=status)
 
 
+@app.get("/api/command-receipt/{token}")
+async def command_receipt(token: str):
+    receipt = _command_receipts.get(token)
+    vehicle, _ = db_reader.get_vehicle()
+    now = time.monotonic()
+    if not receipt or receipt["expires"] <= now or receipt["vin"] != (vehicle or {}).get("vin"):
+        return JSONResponse({"status": "unconfirmed"}, status_code=404, headers={"Cache-Control": "no-store"})
+    state = "confirmed" if receipt["confirmed"] else (
+        "waiting" if now < receipt["deadline"] and receipt["epoch"] == _command_epoch else "unconfirmed")
+    return JSONResponse({"status": state}, headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/command/{name}", response_class=HTMLResponse)
 async def run_command(name: str, request: Request, background_tasks: BackgroundTasks):
     fn = _COMMANDS.get(name)
@@ -5690,7 +5717,8 @@ async def run_command(name: str, request: Request, background_tasks: BackgroundT
     # intercept the press and show the same notice the official app does, instead of
     # bouncing it off the car. data-warn tells the Commands page to leave the message
     # up (no grid refetch).
-    warn = _blocked_while_driving(name, db_reader.get_latest_status() or {},
+    current_status = db_reader.get_latest_status() or {}
+    warn = _blocked_while_driving(name, current_status,
                                   i18n.get_t(db_reader.get_language()))
     if warn:
         return _cmd_response(request, payload={"ok": False, "error": warn, "blocked": True},
@@ -5731,7 +5759,7 @@ async def run_command(name: str, request: Request, background_tasks: BackgroundT
     expected = dict(overrides)                  # what the post-command check waits for
     field = _CLIMATE_TILES.get(name)
     if field:
-        cur = db_reader.get_latest_status() or {}
+        cur = current_status
         if name == "ac_on":
             # "A/C AUTO" counts as ON only when the car is REALLY in AUTO (mode 0). From OFF or from a
             # manual mode (cool/heat/vent), pressing it ENGAGES auto (ac_on) — it must not "turn off".
@@ -5752,6 +5780,7 @@ async def run_command(name: str, request: Request, background_tasks: BackgroundT
         overrides = {}                          # never fake climate state in the DB
 
     import asyncio
+    sent_ms = int(time.time() * 1000)
     ok, msg = await asyncio.get_event_loop().run_in_executor(None, fn)
     if ok:
         # No optimistic overlay: the UI shows ONLY the real signal state, never a faked "done" before the
@@ -5763,14 +5792,37 @@ async def run_command(name: str, request: Request, background_tasks: BackgroundT
         # spinner and refresh from real signals after a delay (like slow commands).
         slow = name in _SLOW_COMMANDS or field is not None
         refresh_delay = 2
-        background_tasks.add_task(_post_command_refresh, expected, epoch, refresh_delay,
-                                  vin=(_veh or {}).get("vin"))
+        vin = (_veh or {}).get("vin")
         if "cloud accepted" in msg.lower():
             from html import escape
+            from api_backend import is_china
             message = i18n.get_t(db_reader.get_language())("command_accepted_unconfirmed")
-            return _cmd_response(request,
+            response = _cmd_response(request,
                 payload={"ok": True, "status": "accepted_unconfirmed", "message": message},
                 html='<span data-warn="1" data-accepted="1" style="color:#fbbf24">' + escape(message) + '</span>')
+            if not is_china() or not vin:
+                background_tasks.add_task(_post_command_refresh, expected, epoch, refresh_delay, vin=vin)
+                return response
+            if name in ("open_windows", "close_windows"):
+                expected = {"windows_open": name == "open_windows"}
+            if field and turning_off:
+                expected = {"climate_on": False}
+            now = time.monotonic()
+            can_verify = any(current_status.get(key) is not None and current_status[key] != value
+                             for key, value in expected.items())
+            token = uuid.uuid4().hex
+            for expired in [key for key, item in _command_receipts.items() if item["expires"] <= now]:
+                del _command_receipts[expired]
+            receipt = {"vin": vin, "epoch": epoch, "confirmed": False, "expires": now + 120,
+                       "deadline": now + _COMMAND_VERIFY_S if can_verify else now,
+                       "after_ms": max(sent_ms, current_status.get("frame_ts") or 0)}
+            _command_receipts[token] = receipt
+            response.headers["X-Mate-Command-Receipt"] = token
+            if can_verify:
+                background_tasks.add_task(_post_command_refresh, expected, epoch, refresh_delay,
+                                          vin=vin, receipt=receipt)
+            return response
+        background_tasks.add_task(_post_command_refresh, expected, epoch, refresh_delay, vin=vin)
         if slow:
             return _cmd_response(request, payload={"ok": True, "status": "pending"},
                 html='<span data-slow="1" style="color:#60a5fa;display:inline-flex;align-items:center;gap:4px"><svg style="animation:spin 1s linear infinite;width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></span><style>@keyframes spin{to{transform:rotate(360deg)}}</style>')

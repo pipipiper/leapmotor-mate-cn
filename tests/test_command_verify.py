@@ -102,6 +102,30 @@ def test_no_signals_does_not_crash_or_save(monkeypatch):
     assert calls["clear"] == 1                                 # overlay dropped at deadline
 
 
+def test_cn_receipt_waits_for_new_reported_state_from_the_same_car(monkeypatch):
+    from cn_telemetry import decode_status
+    from test_cn_adapter import raw, vehicle
+    from vehicle_snapshot import SnapshotSignals
+
+    car = vehicle()
+    def frame(timestamp, target=car, locked=1):
+        return SnapshotSignals(decode_status(raw(**{'sts': timestamp, '1298': locked}), target))
+
+    stale = frame(1_799_999_999_000)
+    other_car = frame(1_800_000_002_000, vehicle('SYNTHETIC-OTHER'))
+    missing = frame(1_800_000_005_000, locked=None)
+    confirmed = frame(1_800_000_009_000)
+    readings = iter((stale, other_car, missing, confirmed))
+    clock, calls = _patch(monkeypatch, lambda: next(readings))
+    clock.t = 1_800_000_000
+    main.time.monotonic = clock.time
+    monkeypatch.setattr(main, "_command_epoch", 6)
+    receipt = {"deadline": clock.t + 30, "after_ms": int(clock.t * 1000), "confirmed": False}
+    main._post_command_refresh({"is_locked": 1}, epoch=6, delay=1, vin=car.vin, receipt=receipt)
+    assert receipt["confirmed"] is True
+    assert calls["save"] == [confirmed]
+
+
 # ── sunshade locked while driving (the car refuses it in motion) ─────────────────
 
 _T = lambda k: k   # identity translator → returns the i18n key

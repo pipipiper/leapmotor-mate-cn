@@ -27,29 +27,33 @@
      a sibling (not a <button>), so it stays fully visible. */
   #hero-cmds.cmds-busy button{pointer-events:none;opacity:.45}
 </style>
-<div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+<div class="mb-4 sm:mb-6">
   <div>
     <h1 class="text-2xl font-bold text-white">{{ t('overview_title') }}</h1>
     <p class="text-slate-400 text-sm mt-1">{{ vehicle.car_type if vehicle else 'LeapMotor' }} {{ t('live_status') }}</p>
   </div>
-  {# Whether the data on this page can be trusted — beside the heading, where a glance lands
-     first, on its own refresh so it stays current between the cards' own reloads. #}
-  {% if data_link %}
-  <div id="link-pill" class="w-full sm:w-auto sm:max-w-[36rem]" hx-get="api/link-pill" hx-trigger="every 30s" hx-swap="innerHTML">
-    {% include "partials/link_pill.html" %}
-  </div>
-  {% endif %}
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
 
   <!-- Status card (auto-refresh every 30s via HTMX) -->
-  <div class="card md:col-span-1"
+  <div class="min-w-0">
+  <div class="card"
        id="status-card"
        hx-get="api/status-card"
        hx-trigger="load, every 30s"
+       hx-on::before-swap="const details = this.querySelector('details'); if (details) this.dataset.detailsOpen = details.open"
+       hx-on::after-swap="const details = this.querySelector('details'); if (details) details.open = this.dataset.detailsOpen === 'true' || (this.dataset.detailsOpen === undefined && matchMedia('(min-width: 768px)').matches)"
        hx-swap="innerHTML">
     {% include "partials/status_card.html" %}
+  </div>
+  {% if data_link %}
+  <div id="link-pill" class="mt-3" hx-get="api/link-pill" hx-trigger="every 30s" hx-swap="innerHTML"
+       hx-on::before-swap="this.dataset.detailsOpen = !!this.querySelector('details[open]')"
+       hx-on::after-swap="const details = this.querySelector('details'); if (details) details.open = this.dataset.detailsOpen === 'true'">
+    {% include "partials/link_pill.html" %}
+  </div>
+  {% endif %}
   </div>
 
   <!-- Vehicle hero: image + live status overlaid + quick commands (+ charging animation).
@@ -65,6 +69,7 @@
       {% include "partials/overview_hero.html" %}
     </div>
     <div id="hero-cmd-result" class="text-center text-[11px] mt-2 min-h-[14px]"></div>
+    {% with receipt_layout = 'mt-2' %}{% include "partials/command_receipt.html" %}{% endwith %}
     <div id="cmd-ready" class="text-center text-[10px] mt-0.5 text-emerald-400">{{ t('cmd_ready') }}</div>
   </div>
 
@@ -305,6 +310,9 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 </div>
 
 <script>
+const vehicleDetails = document.getElementById('overview-status-details');
+if (vehicleDetails) vehicleDetails.open = matchMedia('(min-width: 768px)').matches;
+
 // Quick-command feedback on the hero card. We show ONLY the real state (no optimistic fake), so after a
 // command we re-poll the car — the backend boosts the poll — and refetch the hero as the real state lands
 // over the next few seconds. Never a "done" before the car actually reports it.
@@ -352,12 +360,15 @@ function tick() {                                   // single owner of the pill 
   if (pendingExpect && document.querySelector('#hero-body [hx-post="api/command/' + pendingExpect + '"]')) pendingExpect = null;
   if (pendingExpect && (Date.now() - busyStart) > 30000) pendingExpect = null;
   var busy = sending || isBusy();
-  showSpin(busySlot, busy);
+  var receipt = document.getElementById('command-receipt');
+  var receiptVisible = receipt && !receipt.classList.contains('hidden');
+  showSpin(busySlot, busy && !receiptVisible);
   var grid = document.getElementById('hero-cmds');   // make every command button inert while busy
   if (grid) grid.classList.toggle('cmds-busy', busy);
   if (!busy) busySlot = null;
   var el = document.getElementById('cmd-ready');
   if (el) {
+    el.hidden = !!receiptVisible;
     el.textContent = busy ? SENDING_MSG : READY_MSG;
     el.className = 'text-center text-[10px] mt-0.5 ' + (busy ? 'text-rose-400' : 'text-emerald-400');
   }
@@ -377,6 +388,7 @@ document.addEventListener('htmx:beforeRequest', function(e) {
   if (path.indexOf('api/command/') !== -1) {
     if (sending || isBusy()) { e.preventDefault(); return; }   // a command is already in progress — block
     sending = true; sendingSince = Date.now();
+    if (window.mateCommandReceipt) window.mateCommandReceipt.begin();
     busySlot = slotOf((path.split('api/command/')[1] || '').replace(/\/$/, ''));
     showSpin(busySlot, true);
     tick(); return;
@@ -392,11 +404,12 @@ document.addEventListener('htmx:afterRequest', function(e) {
   var name = (path.split('api/command/')[1] || '').replace(/\/$/, '');
   var res = document.getElementById('hero-cmd-result');
   var accepted = res && res.querySelector('[data-accepted]');
-  if (e.detail.successful && res && (accepted || !res.querySelector('[data-warn]'))) {
-    if (!accepted) res.innerHTML = '';                // retain the unconfirmed acceptance notice
+  var hasReceipt = window.mateCommandReceipt && window.mateCommandReceipt.read(e.detail.xhr);
+  if (e.detail.successful && res && (accepted || hasReceipt || res.querySelector('[data-ok], [data-slow]'))) {
+    if (!accepted || hasReceipt) res.innerHTML = '';
     // Start the hidden 10 s floor + (movement only) the real-confirm wait. The ⏳ + red stay until both end.
     busySlot = slotOf(name); busyUntil = Date.now() + BUSY_MS; busyStart = Date.now();
-    pendingExpect = CONFIRM[name] || null;
+    pendingExpect = hasReceipt ? null : CONFIRM[name] || null;
     // Re-poll the car (the backend boosts it) and refetch the body as the real state lands.
     [1500, 4000, 8000, 14000, 22000, 31000].forEach(function (ms) { setTimeout(refreshHero, ms); });
   } else if (res && res.querySelector('[data-warn]')) {
@@ -427,6 +440,9 @@ function showLivePicture() {
 showLivePicture();
 
 // Re-apply the ⏳ + pill right after the body refetches (the swap recreated the buttons).
+document.addEventListener('htmx:beforeSwap', function(e) {
+  if (sending && e.detail.target && e.detail.target.id === 'hero-body') e.detail.shouldSwap = false;
+});
 document.addEventListener('htmx:afterSwap', function(e) {
   if (e.detail.target && e.detail.target.id === 'hero-body') { tick(); showLivePicture(); }
 });

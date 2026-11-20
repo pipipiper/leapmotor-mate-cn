@@ -4,6 +4,7 @@ import copy
 import hashlib
 import hmac
 import json
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -575,7 +576,7 @@ def test_missing_cn_readings_are_unknown_on_overview(api,monkeypatch):
     database.save_position(vid,decode_status(payload,vehicle()).data)
     response=TestClient(web_main.app).get('/api/status-card')
     assert response.status_code==200
-    assert 'leading-none mt-1">—' in response.text
+    assert re.search(r'id="overview-range"[^>]*>—</div>', response.text)
     assert 'text-white text-lg">—' in response.text
     assert db_reader.get_latest_status()['odometer_km'] is None
     database._conn.close()

@@ -24,6 +24,7 @@
 <div class="flex flex-col items-center gap-1.5" data-slot="{{ slot }}">
   <div class="relative">
     <button hx-post="api/command/{{ cmd }}" hx-target="#hero-cmd-result" hx-swap="innerHTML"
+            aria-label="{{ label }}"
             hx-indicator="#hero-spin-{{ cmd }}"
             {% if confirm and not drv %}hx-confirm="{{ confirm }}"{% endif %}
             onclick="document.getElementById('hero-cmd-result').innerHTML=''"

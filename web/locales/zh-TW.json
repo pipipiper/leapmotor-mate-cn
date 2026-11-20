@@ -1,5 +1,11 @@
 {
   "translations": {
+    "overview_last_received": "Mate 最後收到",
+    "overview_door_alert": "車門未關閉",
+    "overview_link_details": "連線詳情",
+    "cmd_receipt_waiting": "雲端已受理 · 等待車輛確認",
+    "cmd_receipt_confirmed": "車輛已確認",
+    "overview_more_status": "更多車況",
     "charge_live_title": "即時充電",
     "charge_live_telemetry": "電壓與電流",
     "cn_charge_official_title": "官方充電記錄",

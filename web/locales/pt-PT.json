@@ -1,5 +1,11 @@
 {
   "translations": {
+    "overview_last_received": "Última receção no Mate",
+    "overview_door_alert": "Há uma porta aberta",
+    "overview_link_details": "Detalhes da ligação",
+    "cmd_receipt_waiting": "Aceite pela cloud · a aguardar o veículo",
+    "cmd_receipt_confirmed": "Confirmado pelo veículo",
+    "overview_more_status": "Mais dados do veículo",
     "charge_live_title": "Carregamento em tempo real",
     "charge_live_telemetry": "Tensão e corrente",
     "cn_charge_official_title": "Histórico oficial de carregamentos",

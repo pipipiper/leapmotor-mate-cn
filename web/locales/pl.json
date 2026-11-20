@@ -1,5 +1,11 @@
 {
   "translations": {
+    "overview_last_received": "Ostatnio odebrano w Mate",
+    "overview_door_alert": "Drzwi są otwarte",
+    "overview_link_details": "Szczegóły połączenia",
+    "cmd_receipt_waiting": "Chmura przyjęła polecenie · oczekiwanie na pojazd",
+    "cmd_receipt_confirmed": "Potwierdzone przez pojazd",
+    "overview_more_status": "Więcej danych pojazdu",
     "charge_live_title": "Ładowanie na żywo",
     "charge_live_telemetry": "Napięcie i natężenie",
     "cn_charge_official_title": "Oficjalna historia ładowania",

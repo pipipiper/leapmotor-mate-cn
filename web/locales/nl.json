@@ -1,5 +1,11 @@
 {
   "translations": {
+    "overview_last_received": "Laatst ontvangen door Mate",
+    "overview_door_alert": "Er staat een deur open",
+    "overview_link_details": "Verbindingsdetails",
+    "cmd_receipt_waiting": "Cloud heeft geaccepteerd · wacht op voertuig",
+    "cmd_receipt_confirmed": "Bevestigd door het voertuig",
+    "overview_more_status": "Meer voertuiggegevens",
     "charge_live_title": "Live laadstatus",
     "charge_live_telemetry": "Spanning en stroom",
     "cn_charge_official_title": "Officiële laadgeschiedenis",

@@ -1,7 +1,23 @@
 {% if status %}
-{% set soc = status.soc or 0 %}
-{% set color = soc_color(soc) %}
+{% set soc = status.get('soc') %}
+{% set color = soc_color(soc or 0) %}
 {% set state = state_label(status) %}
+{% set tyres = tyre_warning() %}
+{% set door_open = status.get('door_driver_open') or status.get('door_passenger_open')
+   or status.get('door_rear_left_open') or status.get('door_rear_right_open') %}
+{% set tyre_alert = tyres and tyres.status in ('low', 'too_low', 'high', 'too_high') %}
+{% set charge_fault = status.get('charge_phase') == 'fault' %}
+{% set unlocked = status.get('is_locked') is not none and not status.get('is_locked') and not is_driving(status) %}
+{% if door_open or unlocked or status.get('trunk_open') or status.get('windows_open') or tyre_alert or charge_fault %}
+<div class="flex flex-wrap gap-2 mb-3" id="overview-vehicle-alerts">
+  {% if charge_fault %}<a href="charges" class="rounded-md bg-red-500/10 px-2 py-1 text-xs text-red-300">{{ t('cn_phase_fault') }}</a>{% endif %}
+  {% if door_open %}<a href="vehicle" class="rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-300">{{ t('overview_door_alert') }}</a>{% endif %}
+  {% if unlocked %}<a href="vehicle" class="rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-300">{{ t('hero_doors_unlocked') }}</a>{% endif %}
+  {% if status.get('trunk_open') %}<a href="vehicle" class="rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-300">{{ t('hero_trunk_open') }}</a>{% endif %}
+  {% if status.get('windows_open') %}<a href="vehicle" class="rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-300">{{ t('hero_windows_open') }}</a>{% endif %}
+  {% if tyre_alert %}<a href="vehicle" class="rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-300">{{ t('tyre_pressure') }} · {{ t('tyre_' ~ tyres.status) }}</a>{% endif %}
+</div>
+{% endif %}
 {# #266 — dual range estimates: at the car's charge limit AND at 100%. `show_both` is false when the
    car charges to 100 (or hasn't reported a limit), so the two lines never repeat the same number. #}
 {% set ests = range_estimates(status.range_km, soc) %}
@@ -11,11 +27,11 @@
   <div class="grid grid-cols-2 items-start gap-4">
     <div class="text-left">
       <div class="stat-label">{{ t('battery') }}</div>
-      <div class="text-5xl font-bold leading-none" style="color:{{ color }}">{{ soc|dec(1) }}<span class="text-2xl text-slate-400">%</span></div>
+      <div id="overview-soc" class="text-4xl sm:text-5xl font-bold leading-none tabular-nums" style="color:{{ color }}">{% if soc is not none %}{{ soc|dec(1) }}<span class="text-xl text-slate-400">%</span>{% else %}—{% endif %}</div>
     </div>
     <div class="text-right flex flex-col">
       <div class="stat-label">{{ t('range') }}</div>
-      <div class="stat-value text-4xl leading-none mt-1">{% if china_market() and status.range_km is none %}—{% else %}{{ dist_val(status.range_km)|int }}{% endif %} <span class="text-base font-normal text-slate-400">{{ dist_unit() }}</span></div>
+      <div id="overview-range" class="text-4xl sm:text-5xl font-bold text-white leading-none tabular-nums">{% if status.range_km is none %}—{% else %}{{ dist_val(status.range_km)|int }}<span class="ml-1 text-base font-normal text-slate-400">{{ dist_unit() }}</span>{% endif %}</div>
       {% if ests and not ests.show_both %}
         <!-- Single 100% estimate: show as before in the right column -->
         <div class="text-[11px] text-slate-400 leading-none mt-1">
@@ -24,6 +40,14 @@
       {% endif %}
     </div>
   </div>
+</div>
+
+<div id="overview-frame-age" class="flex flex-wrap justify-between gap-x-2 py-2 mb-2 border-b border-slate-700/70 text-sm text-slate-400">
+  <span>{{ t('last_seen') if status.data_age_s is not none else t('overview_last_received') }}</span>
+  <span class="{{ 'text-amber-400' if status.data_age else 'text-white' }} font-medium whitespace-nowrap"
+        {% if status.data_age %}title="{{ t('data_age_hint') }}"{% endif %}>
+    {{ ago(status.data_age_s if status.data_age_s is not none else status.last_seen_s) }}
+  </span>
 </div>
 
 <!-- Range estimates above SOC bar: dual layout when limit < 100% -->
@@ -40,9 +64,11 @@
 {% endif %}
 
 <!-- SOC bar -->
+{% if soc is not none %}
 <div class="w-full bg-slate-700 rounded-full h-3 {% if battery_price is not none %}mb-1{% else %}mb-5{% endif %}">
   <div class="soc-bar h-3 rounded-full" style="width:{{ soc }}%; background:{{ color }}"></div>
 </div>
+{% endif %}
 
 {# #200 — what the energy in the pack cost on average, i.e. the rate the next trip is costed at.
    Full width UNDER the bar rather than tucked under the % : the label is long in every language
@@ -118,6 +144,8 @@
 </div>
 
 <!-- Details row -->
+<details id="overview-status-details" class="border-t border-slate-700/70 pt-2">
+<summary class="cursor-pointer text-sm font-medium text-slate-300">{{ t('overview_more_status') }}</summary>
 {# #144 — a sensor this car has NEVER reported is not shown at all. A row that reads "—" for ever is
    still a row promising a number that will never come; @staffhotel-beep watched two of them all
    summer. `absent_temps` is measured, not guessed: it only names a sensor after 50 polls with
@@ -130,8 +158,7 @@
 {% set absent = absent_temps() %}
 {# The four tyres in one word, the worst (D#483), from the last stored pressures: None on a car that
    never sent one, and then there is no row. #}
-{% set tyres = tyre_warning() %}
-<div class="grid grid-cols-2 gap-3 text-sm">
+<div class="grid grid-cols-2 gap-3 mt-3 text-sm">
   {# These are half-width cells, so an ODD number of them leaves a hole in the last row — and the
      odometer alone in a 130px column wraps its own value onto a second line. The odometer takes the
      full width exactly when the temperatures left are an even number, so the grid closes flush
@@ -208,26 +235,6 @@
      real B10 through that shared account: the vehicle-update endpoint answers code 40.
      The OTA Update Notice entity stays in Home Assistant (#277) — it is OFF, not wrong.
      → tests/test_the_overview_does_not_claim_the_car_is_up_to_date.py #}
-  <div class="flex justify-between gap-2 text-slate-400 col-span-2">
-    <span class="min-w-0 break-words">{{ t('last_seen') }}</span>
-    <!-- WHEN THE CAR LAST REPORTED, not when we last wrote a row. The poller records a row every
-         30 s even while the cloud re-serves one frozen frame, so this used to read "22 seconds
-         ago" over data that was hours old (#232) — and a figure that is wrong is worse than one
-         that is missing. data_age_s is always measured from the frame's own timestamp; it is None
-         only for a car that reports no clock, and there the row time is all we have.
-
-         The amber stays a MARK, not a second number: it fires on the case worth flagging — the
-         link died while the car was moving or charging (#178) — and a parked, sleeping car never
-         lands there. Printing the age twice under one label would be two correct numbers saying
-         the same thing, which reads as a defect even when both are right. -->
-    <span class="{{ 'text-amber-400' if status.data_age else 'text-white' }} font-medium whitespace-nowrap"
-          {% if status.data_age %}title="{{ t('data_age_hint') }}"{% endif %}>
-      {{ ago(status.data_age_s if status.data_age_s is not none else status.last_seen_s) }}
-    </span>
-  </div>
-  {# China-market commands are normally only "accepted by the cloud", never physically confirmed
-     by the car, so the responsiveness metric can stay on its unknown placeholder forever. Show the
-     row only once there is enough real evidence to say something. #}
   {% if car_resp and not (china_market is defined and china_market() and car_resp.state == 'unknown') %}
   <div class="flex justify-between items-center text-slate-400 col-span-2 gap-2" title="{{ t('car_resp_hint') }}">
     <span class="flex-shrink-0">📶 {{ t('car_resp_title') }}</span>
@@ -243,6 +250,7 @@
   </div>
   {% endif %}
 </div>
+</details>
 
 {% else %}
 <div class="text-center py-8 text-slate-400">

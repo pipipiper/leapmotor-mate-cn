@@ -1,0 +1,9 @@
+{% if china_market is defined and china_market() %}
+<div id="command-receipt" role="status" aria-live="polite" aria-atomic="true"
+     class="hidden rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-medium {{ receipt_layout }}"
+     data-sending="{{ t('cmd_sending') }}"
+     data-waiting="{{ t('cmd_receipt_waiting') }}"
+     data-confirmed="{{ t('cmd_receipt_confirmed') }}"
+     data-unconfirmed="{{ t('command_accepted_unconfirmed') }}"></div>
+<script src="static/command-receipt.js"></script>
+{% endif %}

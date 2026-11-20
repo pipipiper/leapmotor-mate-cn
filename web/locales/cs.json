@@ -1,5 +1,11 @@
 {
   "translations": {
+    "overview_last_received": "Naposledy přijato v Mate",
+    "overview_door_alert": "Dveře jsou otevřené",
+    "overview_link_details": "Podrobnosti připojení",
+    "cmd_receipt_waiting": "Cloud přijal požadavek · čeká se na vozidlo",
+    "cmd_receipt_confirmed": "Potvrzeno vozidlem",
+    "overview_more_status": "Další údaje o vozidle",
     "charge_live_title": "Živé nabíjení",
     "charge_live_telemetry": "Napětí a proud",
     "cn_charge_official_title": "Oficiální historie nabíjení",

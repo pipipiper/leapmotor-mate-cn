@@ -21,14 +21,20 @@
   {% macro node(text, tip, cls='') -%}
   <span class="{{ cls }}" tabindex="0" data-tip="{{ tip }}">{{ text }}</span>
   {%- endmacro %}
-  <div class="flex items-center gap-2 text-xs font-medium text-slate-300" data-link-chain="{{ _cloud }}-{{ _car }}">
+  {% if data_link.red %}
+  <div class="mb-1 font-semibold text-red-200" data-link-banner="{{ data_link.state }}">{{ t('link_banner_' + ('bad_creds' if data_link.bad_creds else data_link.state)) }}</div>
+  {% elif data_link.amber %}
+  <div class="mb-1 text-xs text-amber-300" data-link-reason>{{ t('link_no_new_data').replace('{state}', t('link_state_' + data_link.last_state)).replace('{since}', when(data_link.car.frame)) }}</div>
+  {% endif %}
+  <details>
+  <summary class="cursor-pointer text-xs font-medium text-slate-300">{{ t('overview_link_details') }}</summary>
+  <div class="flex flex-wrap items-center gap-2 mt-2 text-xs font-medium text-slate-300" data-link-chain="{{ _cloud }}-{{ _car }}">
     <span class="text-slate-400" data-tip="{{ t('link_hint') }}">🔗</span>
     {{ node('Mate', _tip_mate) }}<span class="w-4 h-px bg-slate-600"></span><span class="inline-block w-2.5 h-2.5 rounded-full {{ _dot[_cloud] }}"></span>
     {{ node(t('link_cloud'), _tip_cloud, 'text-red-300' if _cloud == 'red' else '') }}<span class="w-4 h-px bg-slate-600"></span><span class="inline-block w-2.5 h-2.5 rounded-full {{ _dot[_car] }}"></span>
     {{ node(t('link_car'), _tip_car, 'text-amber-300' if _car == 'amber' else 'text-slate-500' if _car == 'grey' else '') }}
   </div>
   {% if data_link.red %}
-  <div class="mt-1 font-semibold text-red-200" data-link-banner="{{ data_link.state }}">{{ t('link_banner_' + ('bad_creds' if data_link.bad_creds else data_link.state)) }}</div>
   <div class="text-xs text-red-200/70 space-y-0.5">
     <div>{{ t('link_banner_last').replace('{when}', frame_when()) }}</div>
     {% if data_link.retry_min %}{% set _r = t('link_retry').replace('{when}', data_link.retry_local or '—').replace('{n}', data_link.retry_min|string) %}<div>{{ _r[0]|upper }}{{ _r[1:] }}.</div>{% endif %}
@@ -36,7 +42,6 @@
     {% if data_link.reason %}<div class="font-mono break-all text-red-200/60" data-link-error>{{ data_link.reason }}</div>{% endif %}
     {% if data_link.bad_creds %}<div>{{ t('link_banner_password_hint') }}</div>{% endif %}
   </div>
-  {% elif data_link.amber %}
-  <div class="mt-1 text-xs text-amber-300" data-link-reason>{{ t('link_no_new_data').replace('{state}', t('link_state_' + data_link.last_state)).replace('{since}', when(data_link.car.frame)) }}</div>
   {% endif %}
+  </details>
 </div>

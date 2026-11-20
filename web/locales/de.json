@@ -1,5 +1,11 @@
 {
   "translations": {
+    "overview_last_received": "Zuletzt von Mate empfangen",
+    "overview_door_alert": "Eine Tür ist offen",
+    "overview_link_details": "Verbindungsdetails",
+    "cmd_receipt_waiting": "Cloud hat angenommen · wartet auf das Fahrzeug",
+    "cmd_receipt_confirmed": "Vom Fahrzeug bestätigt",
+    "overview_more_status": "Weitere Fahrzeugdaten",
     "charge_live_title": "Live-Ladestatus",
     "charge_live_telemetry": "Spannung und Strom",
     "cn_charge_official_title": "Offizieller Ladeverlauf",

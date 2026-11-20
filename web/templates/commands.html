@@ -13,6 +13,7 @@
   <p class="text-slate-400 text-sm mt-1">{{ t('commands_subtitle') }}</p>
 </div>
 
+{% with receipt_layout = 'sticky top-2 z-20 mb-3' %}{% include "partials/command_receipt.html" %}{% endwith %}
 {% include "partials/cmd_grid.html" %}
 {# Dummy request-source OUTSIDE #cmd-grid: htmx puts the `htmx-request` class on the source, and the
    command ⏳ indicators only light up when that class is on one of THEIR ancestors. Refreshing with
@@ -130,8 +131,9 @@ function cmdBusyTick() {
   var busy = sending || isBusy();
   var grid = document.getElementById('cmd-grid');
   if (grid) grid.classList.toggle('cmds-busy', busy);
-  if (busy) setBusyUI(busyCmd, true);
-  else { setBusyUI(busyCmd, false); busyCmd = null; }
+  var receipt = document.getElementById('command-receipt');
+  setBusyUI(busyCmd, busy && (!receipt || receipt.classList.contains('hidden')));
+  if (!busy) busyCmd = null;
 }
 setInterval(cmdBusyTick, 300);
 
@@ -153,6 +155,7 @@ document.addEventListener('htmx:beforeRequest', function(e) {
   if (path.indexOf('api/command/') !== -1) {
     if (sending || isBusy()) { e.preventDefault(); return; }   // a command is already in progress — block (no popup)
     sending = true; sendingSince = Date.now();
+    if (window.mateCommandReceipt) window.mateCommandReceipt.begin();
     busyCmd = (path.split('api/command/')[1] || '').replace(/\/$/, '');
     cmdsOut.push(e.detail.xhr);
     var xhr = e.detail.xhr, elt = e.detail.elt;
@@ -186,19 +189,20 @@ document.addEventListener('htmx:afterRequest', function(e) {
     // Read the request's own target, including comfort tiles and cloud-only acceptance.
     var el = e.detail.target;
     var accepted = el && el.querySelector('[data-accepted]');
-    var took = e.detail.successful && !!(el && (el.querySelector('[data-ok]') || el.querySelector('[data-slow]') || accepted));
+    var hasReceipt = window.mateCommandReceipt && window.mateCommandReceipt.read(e.detail.xhr);
+    var took = e.detail.successful && !!(hasReceipt || (el && el.querySelector('[data-ok], [data-slow], [data-accepted]')));
     var steer = e.detail.requestConfig.steer;
     if (steer && steer.seq === steerSeq) {
       if (took) steerResume(steer.hold);
       else { steerHold = null; var sl = document.querySelector(STEER_SLIDER); if (sl) steerRestore(sl); }
     }
     if (took) {
-      if (!accepted) el.innerHTML = ''; // Retain the unconfirmed cloud acceptance notice.
+      if (el && (!accepted || hasReceipt)) el.innerHTML = '';
 
       busyCmd = name; busyUntil = Date.now() + BUSY_MS; busyStart = Date.now();
-      pendingExpect = CONFIRM[name] || null;                  // movement toggle → wait for the real flip too
-      pendingShade = name in SHADE_END ? SHADE_END[name] : null;
-    } else if (el.querySelector('[data-warn]')) {
+      pendingExpect = hasReceipt ? null : CONFIRM[name] || null;
+      pendingShade = !hasReceipt && name in SHADE_END ? SHADE_END[name] : null;
+    } else if (el && el.querySelector('[data-warn]')) {
       setBusyUI(busyCmd, false); busyCmd = null;              // refused (e.g. driving) → drop the ⏳, keep the notice
       noticeGone(el);
       cmdBusyTick(); return;                                  // nothing changed on the car → no grid refetch
