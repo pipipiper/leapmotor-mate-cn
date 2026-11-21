@@ -413,9 +413,9 @@
       try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (_) {}
       label();
       if (on && !map) {
-        map = {% if china_market is defined and china_market() %}MateMap.create{% else %}L.map{% endif %}('events-map', { zoomControl: false, attributionControl: false });
+        map = {% if china_market is defined and china_market() %}MateMap.create{% else %}L.map{% endif %}('events-map', { zoomControl: false });
         {% if china_market is defined and china_market() %}MateMap.addTiles(map);{% else %}
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { referrerPolicy: 'origin' }).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', referrerPolicy: 'origin' }).addTo(map);
 {% endif %}
         layer = L.layerGroup().addTo(map);
         draw();

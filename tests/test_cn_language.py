@@ -60,7 +60,7 @@ def test_both_flag_labels_and_switching_are_saved_on_settings(cn_web):
         assert response.headers['HX-Refresh'] == 'true'
         assert db_reader.get_language() == lang
         html = client.get('/settings').text
-        assert '🇨🇳 简体中文' in html and '🇭🇰 繁體中文' in html
+        assert '>简体中文</option>' in html and '>繁體中文</option>' in html
         assert f'value="{lang}" selected' in html
 
 
@@ -116,7 +116,7 @@ def test_setup_switches_language_without_losing_phone_capacity_or_pin(cn_web, wi
         page.route('**/*', serve)
         page.goto('http://mate-cn.test/setup')
         assert page.locator('html').get_attribute('lang') == 'zh-CN'
-        assert page.locator('#language option').all_text_contents() == ['🇨🇳 简体中文', '🇭🇰 繁體中文']
+        assert page.locator('#language option').all_text_contents() == ['简体中文', '繁體中文']
         page.locator('#phone').fill('13800000000')
         page.locator('#code').fill('123456')
         page.locator('#language').select_option('zh-TW')

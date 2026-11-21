@@ -31,7 +31,7 @@
 {%- endif -%}
 {%- endmacro -%}
 <!DOCTYPE html>
-<html lang="{{ lang|default('en') }}" class="h-full">
+<html lang="{{ lang|default('en') }}" class="h-full"{% if map_basemap is defined and china_market is defined and china_market() %} data-mate-map-provider="{{ map_basemap() }}"{% set js_key = amap_vector_key() %}{% if js_key %} data-mate-amap-js-key="{{ js_key }}" data-mate-amap-vector-fallback="{{ t('amap_vector_fallback') }}"{% endif %}{% endif %}>
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -72,6 +72,23 @@
     }
   </script>
   <style>
+    /* Use bare code points for UI icons. WebKit honors emoji selectors
+       ahead of custom outlines when a label explicitly requests them. */
+    @font-face {
+      font-family: "Mate UI Icons";
+      src: url("static/mate-ui-icons.woff2") format("woff2");
+      font-weight: 100 900;
+      font-display: swap;
+    }
+    html:root {
+      font-family: "Mate UI Icons", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    body .font-mono {
+      font-family: "Mate UI Icons", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    body .leaflet-container {
+      font-family: "Mate UI Icons", "Helvetica Neue", Arial, Helvetica, sans-serif;
+    }
     .soc-bar { transition: width 0.6s ease; }
 
     .nav-link {
@@ -357,12 +374,12 @@
                        focus:outline-none">
           {% for v in vehicles %}
           <option value="{{ v.vin }}" {% if v.id == vehicle.id %}selected{% endif %}>
-            {{ v.car_type }} {{ v.year or '' }}
+            {{ display_model(v.car_type) }} {{ v.year or '' }}
           </option>
           {% endfor %}
         </select>
         {% else %}
-        <span class="text-xs text-slate-400">{{ vehicle.car_type }} {{ vehicle.year or '' }}</span>
+        <span class="text-xs text-slate-400">{{ display_model(vehicle.car_type) }} {{ vehicle.year or '' }}</span>
         {% endif %}
         <button type="button" title="{{ t('refresh_help') }}"
                 class="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2 py-1 text-[11px] font-medium text-slate-300 hover:border-brand hover:text-white disabled:opacity-50"
@@ -395,7 +412,7 @@
                      rounded-md px-2 py-2 hover:border-brand focus:border-brand focus:outline-none">
         {% for v in vehicles %}
         <option value="{{ v.vin }}" {% if v.id == vehicle.id %}selected{% endif %}>
-          {{ v.car_type }} {{ v.year or '' }}
+          {{ display_model(v.car_type) }} {{ v.year or '' }}
         </option>
         {% endfor %}
       </select>
@@ -421,7 +438,7 @@
         <span class="text-lg">⛽</span> {{ t('nav_reev') }}
       </a>
       <a href="fuel"        class="nav-link {% if page=='fuel'        %}active{% endif %}">
-        <span class="text-lg">🛢️</span> {{ t('nav_fuel') }}
+        <span class="text-lg">🛢</span> {{ t('nav_fuel') }}
       </a>
       {% endif %}
       <a href="costs"       class="nav-link {% if page=='costs'       %}active{% endif %}">
@@ -464,7 +481,7 @@
     <!-- Settings at bottom -->
     <div class="px-3 py-4 border-t border-slate-700">
       <a href="settings" class="nav-link {% if page=='settings' %}active{% endif %}">
-        <span class="text-lg">⚙️</span> {{ t('nav_settings') }}
+        <span class="text-lg">⚙</span> {{ t('nav_settings') }}
       </a>
       {% if auth_enabled %}
       <a href="logout" class="nav-link">

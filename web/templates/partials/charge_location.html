@@ -18,7 +18,7 @@
      nothing), one that never had a name simply still doesn't. #}
   {% with said_size='text-[11px]', said_style='flex-basis:100%;order:1' %}{% include "partials/_place_lookup_said.html" %}{% endwith %}
   {# The address of the point, looked up now (main.py charge_look_up_address), unless a charging place names it. #}
-  {% if charge.gps_fix and not charge.address_found and not charge.place_charging and not charge.charging_place_name %}
+  {% if charge.gps_fix and (not charge.address_found or charge.address_refreshable) and not charge.place_charging and not charge.charging_place_name %}
   <button type="button" title="{{ t('charge_place_look_up') }}"
           hx-post="api/charges/{{ charge.id }}/address"
           hx-target="#loc-{{ charge.id }}" hx-swap="outerHTML"
@@ -42,7 +42,7 @@
   <button type="button" title="{{ t('charger_locator_manual_hint') }}"
           onclick="var f=document.getElementById('loc-manual-{{ charge.id }}');f.classList.toggle('hidden');f.classList.toggle('flex');if(!f.classList.contains('hidden'))f.querySelector('input').focus()"
           class="text-slate-500 hover:text-brand"
-          style="background:none;border:none;cursor:pointer;padding:0;font-size:11px;line-height:1">✏️</button>
+          style="background:none;border:none;cursor:pointer;padding:0;font-size:11px;line-height:1">✏</button>
   <form id="loc-manual-{{ charge.id }}" class="hidden items-center" style="gap:4px"
         hx-post="api/charges/{{ charge.id }}/locate/manual"
         hx-target="#loc-{{ charge.id }}" hx-swap="outerHTML">

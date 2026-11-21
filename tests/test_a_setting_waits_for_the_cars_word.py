@@ -211,7 +211,7 @@ def test_the_page_tells_the_cars_yes_from_its_silence(monkeypatch, outcome, ok, 
 
 @pytest.mark.parametrize('ok, message, shown, kept', [
     (True, 'The car carried it out', '✓ Schedule saved', True),
-    (False, 'Remote control result unconfirmed; not retried', '⏱️', False),
+    (False, 'Remote control result unconfirmed; not retried', '⏱', False),
 ])
 def test_the_save_button_says_what_the_car_said(tmp_path, monkeypatch, ok, message, shown, kept):
     """What the Save button shows. When the car stays silent the page shows the amber notice the

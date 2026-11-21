@@ -61,9 +61,9 @@
             <select name="language"
                     class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-600 text-white
                            text-sm focus:outline-none focus:border-brand cursor-pointer">
-              <option value="zh-CN" {% if lang == "zh-CN" %}selected{% endif %}>🇨🇳 {{ t('lang_zh_cn') }}</option>
-              <option value="zh-TW" {% if lang == "zh-TW" %}selected{% endif %}>🇭🇰 {{ t('lang_zh_tw') }}</option>
-              <option value="en" {% if lang == 'en' %}selected{% endif %}>🇬🇧 {{ t('lang_en') }}</option>
+              <option value="zh-CN" {% if lang == "zh-CN" %}selected{% endif %}>{{ t('lang_zh_cn') }}</option>
+              <option value="zh-TW" {% if lang == "zh-TW" %}selected{% endif %}>{{ t('lang_zh_tw') }}</option>
+              <option value="en" {% if lang == 'en' %}selected{% endif %}>{{ t('lang_en') }}</option>
             </select>
           </form>
         </div>
@@ -120,7 +120,7 @@
        and does whatever its platform requires (a LaunchAgent on macOS, the registry on Windows),
        so the same switch works on both without Mate knowing the difference. #}
     {% if shell_version %}
-    {% call scard('desktop', '🖥️ ' + t('desktop_section'), card_open.get('desktop')) %}
+    {% call scard('desktop', '🖥 ' + t('desktop_section'), card_open.get('desktop')) %}
       <form hx-post="api/settings/desktop-autostart" hx-trigger="change"
             hx-target="#desktop-autostart-feedback" hx-swap="innerHTML">
         <label class="flex items-center justify-between gap-3 cursor-pointer">
@@ -248,7 +248,7 @@
       <div class="space-y-3 text-sm">
         <div class="flex justify-between">
           <span class="text-slate-400">{{ t('model') }}</span>
-          <span class="text-white">Leapmotor {{ vehicle.car_type }} {{ vehicle.year or '' }}</span>
+          <span class="text-white">Leapmotor {{ display_model(vehicle.car_type) }} {{ vehicle.year or '' }}</span>
         </div>
         <div class="flex justify-between">
           <span class="text-slate-400">{{ t('vin') }}</span>
@@ -278,14 +278,14 @@
             <select name="vin"
                     class="block w-full mt-1 px-2 py-1.5 rounded-lg text-sm text-white border border-slate-600 bg-slate-800 focus:outline-none focus:border-brand">
               {% for v in vehicles %}
-              <option value="{{ v.vin }}"{% if v.vin == vehicle.vin %} selected{% endif %}>{{ v.car_type or v.vin[-6:] }} · {{ v.vin[-6:] }}</option>
+              <option value="{{ v.vin }}"{% if v.vin == vehicle.vin %} selected{% endif %}>{{ display_model(v.car_type) or v.vin[-6:] }} · {{ v.vin[-6:] }}</option>
               {% endfor %}
             </select>
           </label>
           {% else %}
           <input type="hidden" name="vin" value="{{ vehicle.vin }}">
           {% endif %}
-          <label class="text-slate-400">{{ t('account_pin_label') }}{% if not (vehicles and vehicles|length > 1) %} · {{ vehicle.car_type }} · {{ vehicle.vin[-6:] }}{% endif %}
+          <label class="text-slate-400">{{ t('account_pin_label') }}{% if not (vehicles and vehicles|length > 1) %} · {{ display_model(vehicle.car_type) }} · {{ vehicle.vin[-6:] }}{% endif %}
             <span class="relative block mt-1">
               <input type="password" name="pin" required maxlength="4" inputmode="numeric"
                      autocomplete="off" placeholder="{{ t('setup_pin_ph') }}"
@@ -337,10 +337,10 @@
                 onclick="document.getElementById('reset-panel').classList.toggle('hidden')"
                 class="text-sm font-medium text-rose-400 hover:text-rose-300
                        border border-rose-500/40 hover:border-rose-400 rounded-lg px-4 py-2">
-          🗑️ {{ t('account_reset_btn') }}
+          🗑 {{ t('account_reset_btn') }}
         </button>
         <div id="reset-panel" class="hidden mt-3 rounded-lg border border-rose-500/40 bg-rose-500/5 p-3">
-          <p class="text-xs text-rose-300 leading-snug mb-3">⚠️ {{ t('account_reset_warn') }}</p>
+          <p class="text-xs text-rose-300 leading-snug mb-3">⚠ {{ t('account_reset_warn') }}</p>
           <form hx-post="api/account/factory-reset" hx-swap="none">
             <label class="block text-[11px] text-slate-400 mb-1">{{ t('account_reset_prompt') }}</label>
             <input type="text" name="confirm" autocomplete="off" spellcheck="false"
@@ -566,11 +566,13 @@
         <div>
           <label class="block text-xs text-slate-400 mb-1">{{ t('geocoder_provider_label') }}</label>
           <select name="geocoder_provider"
+                  {% if china_market() %}onchange="this.form.querySelector('#amap-vector-settings').hidden = this.value !== 'amap'"{% endif %}
                   class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
                          text-sm focus:outline-none focus:border-brand cursor-pointer">
             {% set gp = settings.get('geocoder_provider', '') %}
+            <option value="amap" {% if gp == 'amap' %}selected{% endif %}>{{ '高德地图 (AMap)' if lang in ('zh-CN', 'zh-TW') else 'AMap' }}{% if china_market() %} ({{ t('geocoder_recommended') }}){% endif %}</option>
             <option value=""          {% if gp == '' %}selected{% endif %}>{{ t('geocoder_none') }}</option>
-            <option value="geoapify"  {% if gp == 'geoapify' %}selected{% endif %}>Geoapify ({{ t('geocoder_recommended') }})</option>
+            <option value="geoapify"  {% if gp == 'geoapify' %}selected{% endif %}>Geoapify{% if not china_market() %} ({{ t('geocoder_recommended') }}){% endif %}</option>
             <option value="locationiq"{% if gp == 'locationiq' %}selected{% endif %}>LocationIQ</option>
             <option value="tomtom"    {% if gp == 'tomtom' %}selected{% endif %}>TomTom</option>
           </select>
@@ -578,11 +580,32 @@
         <div>
           <label class="block text-xs text-slate-400 mb-1">{{ t('geocoder_key_label') }}</label>
           <input type="password" name="geocoder_key"
-                 autocomplete="off" spellcheck="false" placeholder="{% if settings.get('geocoder_key_set') %}••••••••{% else %}{{ t('geocoder_key_ph') }}{% endif %}"
+                 autocomplete="off" spellcheck="false" placeholder="{% if settings.get('amap_geocoder_key_set' if gp == 'amap' else 'geocoder_key_set') %}••••••••{% else %}{{ t('geocoder_key_ph') }}{% endif %}"
                  class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
                         text-sm font-mono focus:outline-none focus:border-brand">
           <div class="text-[11px] text-slate-500 mt-1">{{ t('geocoder_key_hint') }}</div>
         </div>
+        {% if china_market() %}
+        <fieldset id="amap-vector-settings" class="space-y-2 border-t border-slate-700 pt-3"
+                  {% if gp != 'amap' %}hidden{% endif %}>
+          <input type="hidden" name="amap_vector_present" value="1">
+          <label class="flex items-center justify-between gap-3 text-sm text-white">
+            {{ t('amap_vector_enable') }}
+            <input type="checkbox" name="amap_vector_enabled" value="1"
+                   {% if settings.get('amap_vector_enabled') == '1' %}checked{% endif %}
+                   class="w-5 h-5 accent-brand cursor-pointer">
+          </label>
+          <p class="text-xs text-slate-400">{{ t('amap_vector_hint') }}</p>
+          {% for field, label in [('amap_js_key', 'amap_vector_key'), ('amap_js_security_code', 'amap_vector_security_code')] %}
+          <label class="block text-xs text-slate-400">
+            {{ t(label) }}
+            <input type="password" name="{{ field }}" maxlength="128" autocomplete="off" spellcheck="false"
+                   {% if settings.get(field + '_set') %}placeholder="••••••••"{% endif %}
+                   class="mt-1 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-sm font-mono focus:outline-none focus:border-brand">
+          </label>
+          {% endfor %}
+        </fieldset>
+        {% endif %}
         <!-- Marker field: an unticked checkbox submits nothing. -->
         <input type="hidden" name="place_lookup_present" value="1">
         <label class="flex items-center justify-between gap-3 cursor-pointer pt-1">
@@ -595,7 +618,7 @@
                  class="w-5 h-5 accent-brand cursor-pointer flex-shrink-0">
         </label>
         <div class="flex items-center justify-between gap-3">
-          <div id="geocoder-feedback" class="text-xs"></div>
+          <div id="geocoder-feedback" role="status" class="text-xs"></div>
           <button type="submit"
                   class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2 flex-shrink-0">
             {{ t('geocoder_save') }}
@@ -605,7 +628,7 @@
     {% endcall %}
 
     <!-- Map display: show only charging spots the car has used at least N times. -->
-    {% call scard('map_display', '🗺️ ' + t('map_station_threshold_label'), card_open.get('map_display')) %}
+    {% call scard('map_display', '🗺 ' + t('map_station_threshold_label'), card_open.get('map_display')) %}
       <form hx-post="api/settings/map-station-threshold"
             hx-target="#map-threshold-feedback" hx-swap="innerHTML">
         <div class="flex items-center justify-between mb-1">
@@ -772,7 +795,7 @@
             <p class="mt-1 text-[11px] leading-snug text-slate-500">{{ t('mqtt_prefix_hint') }}</p>
             {% if mqtt_collision %}
             <p class="mt-1.5 text-[11px] leading-snug text-amber-400">
-              ⚠️ {{ t('mqtt_collision_warn').format(prefix=mqtt_collision.prefix) }}
+              ⚠ {{ t('mqtt_collision_warn').format(prefix=mqtt_collision.prefix) }}
               {% if mqtt_collision.moved_to %}<br>{{ t('mqtt_collision_moved').format(prefix=mqtt_collision.moved_to) }}{% endif %}
             </p>
             {% endif %}
@@ -952,7 +975,7 @@
     {% endcall %}
 
     <!-- Advanced tunables -->
-    {% call scard('advanced', '⚙️ ' + t('adv_section'), card_open.get('advanced')) %}
+    {% call scard('advanced', '⚙ ' + t('adv_section'), card_open.get('advanced')) %}
       <div class="text-xs text-slate-400 mb-4">{{ t('adv_desc') }}</div>
       <form hx-post="api/settings/advanced" hx-target="#adv-result" hx-swap="innerHTML" class="space-y-5">
         <div>

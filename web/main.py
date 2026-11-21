@@ -14,6 +14,7 @@ import uuid
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
+from http.client import HTTPSConnection, HTTPException
 
 from fastapi import FastAPI, Request, BackgroundTasks, Query
 from fastapi.responses import (HTMLResponse, RedirectResponse, JSONResponse, Response, FileResponse,
@@ -405,8 +406,27 @@ def _range_estimates(range_km, soc):
     }
 
 
+def _display_model(car_type: str | None) -> str:
+    model = (car_type or "").strip()
+    return "Lafa5" if model.upper() in ("B05", "LAFA5") else model
+
+
+def _map_basemap() -> str:
+    return "amap" if db_reader.get_setting("geocoder_provider", "") == "amap" else "osm"
+
+
+def _amap_vector_key() -> str:
+    if _map_basemap() == "amap" and db_reader.get_setting("amap_vector_enabled", "0") == "1":
+        if db_reader.get_secret("amap_js_security_code"):
+            return db_reader.get_setting("amap_js_key", "")
+    return ""
+
+
 templates.env.globals.update(
     china_market=lambda: __import__("api_backend").is_china(),
+    display_model=_display_model,
+    map_basemap=_map_basemap,
+    amap_vector_key=_amap_vector_key,
 
     dist_unit=units.dist_unit, speed_unit=units.speed_unit, temp_unit=units.temp_unit,
     pressure_unit=units.pressure_unit, eff_unit=units.eff_unit, elev_unit=units.elev_unit,
@@ -706,7 +726,7 @@ def _ctx(**kwargs):
             "charge_phase_label": charge_phase_label,
             "poll_driving_default": db_reader.POLL_DRIVING_DEFAULT_S,
             "unconfigured_cars": ", ".join(
-                (v.get("car_type") or (v.get("vin") or "")[-6:]) for v in _unconfigured),
+                (_display_model(v.get("car_type")) or (v.get("vin") or "")[-6:]) for v in _unconfigured),
             "vehicles": _vehicles,
             # Inside the Mac/Windows app there are TWO versions that matter: Mate itself, which
             # updates on its own, and the app shell around it, which almost never does. When a
@@ -1288,7 +1308,10 @@ def _trip_place_lines(trip: dict) -> dict:
     """What partials/trip_place_lines.html needs: a line for each end with a GPS fix, named or not (none
     without any fix), and whether to credit OpenStreetMap."""
     address_credit = db_reader.trip_places([trip])
+    amap_selected = db_reader.get_setting("geocoder_provider", "") == "amap"
     place_ends = [{"end": end, "label": trip[f"{end}_place"], "charging": trip[f"{end}_place_charging"],
+                   "refreshable": amap_selected and not trip[f"{end}_place_charging"]
+                   and trip.get(f"{end}_address_provider") != "amap",
                    "fix": db_reader.has_gps_fix(trip.get(f"{end}_lat"), trip.get(f"{end}_lon"))}
                   for end in ("start", "end")]
     return {"place_ends": place_ends if any(p["fix"] for p in place_ends) else [], "address_credit": address_credit}
@@ -1373,7 +1396,7 @@ async def trips_merge(request: Request, a: int, b: int, gap: int = db_reader.TRI
             pass
         return Response(status_code=200, headers={"HX-Refresh": "true"})
     t = i18n.get_t(db_reader.get_language())
-    return HTMLResponse(f'<div style="color:#f87171;font-size:13px;padding:6px 0">⚠️ {t("merge_failed")}</div>')
+    return HTMLResponse(f'<div style="color:#f87171;font-size:13px;padding:6px 0">⚠ {t("merge_failed")}</div>')
 
 
 @app.post("/api/trips/unmerge", response_class=HTMLResponse)
@@ -1395,7 +1418,7 @@ async def trip_convert_ec(request: Request, trip_id: int):
     t = i18n.get_t(db_reader.get_language())
     if res.get("reason") == "merged_cloud":
         # Actionable (amber): merging the two trips would recover the data.
-        return HTMLResponse(f'<span class="text-amber-400 text-xs">⚠️ {t("ec_convert_merged")}</span>')
+        return HTMLResponse(f'<span class="text-amber-400 text-xs">⚠ {t("ec_convert_merged")}</span>')
     if res.get("reason") == "shared_session":
         # Actionable (amber): Mate reads these trips as one power-on session, so the official figure
         # covers them together — merging lets it convert the combined drive over its full distance.
@@ -1405,15 +1428,15 @@ async def trip_convert_ec(request: Request, trip_id: int):
         from html import escape as _escape          # module-local elsewhere in this file
         _times = [c for c in (db_reader.trip_local_start_hhmm(i)
                               for i in res.get("other_ids") or []) if c]
-        return HTMLResponse(f'<span class="text-amber-400 text-xs">⚠️ '
+        return HTMLResponse(f'<span class="text-amber-400 text-xs">⚠ '
                             f'{_escape(t("ec_convert_shared").format(trips=", ".join(_times)))}</span>')
     if res.get("reason") == "implausible":
         # The cloud returned a value, but it's an incomplete aggregation (would imply an impossible
         # efficiency). Calm tone: the reliable SoC estimate above is deliberately kept, nothing broke.
-        return HTMLResponse(f'<span class="text-slate-400 text-xs">ℹ️ {t("ec_convert_implausible")}</span>')
+        return HTMLResponse(f'<span class="text-slate-400 text-xs">ℹ {t("ec_convert_implausible")}</span>')
     # Not an error — the cloud just has no per-trip detail for this (often short) trip. Calm, neutral
     # tone so it doesn't read as "something is broken": the SoC estimate above stands.
-    return HTMLResponse(f'<span class="text-slate-400 text-xs">ℹ️ {t("ec_convert_nodata")}</span>')
+    return HTMLResponse(f'<span class="text-slate-400 text-xs">ℹ {t("ec_convert_nodata")}</span>')
 
 
 @app.post("/api/trips/{trip_id}/revert-ec", response_class=HTMLResponse)
@@ -1435,7 +1458,7 @@ async def trip_calc_elevation(request: Request, trip_id: int):
     if res.get("ok"):
         return Response(status_code=200, headers={"HX-Refresh": "true"})
     t = i18n.get_t(db_reader.get_language())
-    return HTMLResponse(f'<span class="text-slate-400 text-xs">ℹ️ {t("elevation_calc_failed")}</span>')
+    return HTMLResponse(f'<span class="text-slate-400 text-xs">ℹ {t("elevation_calc_failed")}</span>')
 
 
 @app.post("/api/trips/{trip_id}/note", response_class=HTMLResponse)
@@ -1509,7 +1532,7 @@ async def charges_merge(request: Request, a: int, b: int, station: str = "", cal
         resp = calendar and _retarget_charges_calendar(request, res["parent_id"], station, year, month, day, to_day)
         return resp or Response(status_code=200, headers={"HX-Refresh": "true"})
     t = i18n.get_t(db_reader.get_language())
-    return HTMLResponse(f'<div style="color:#f87171;font-size:13px;padding:6px 0">⚠️ {t("charge_merge_failed")}</div>')
+    return HTMLResponse(f'<div style="color:#f87171;font-size:13px;padding:6px 0">⚠ {t("charge_merge_failed")}</div>')
 
 
 @app.post("/api/charges/unmerge", response_class=HTMLResponse)
@@ -2096,7 +2119,7 @@ async def fuel_generate_auto_note(request: Request, purchase_id: int):
         return RedirectResponse(request.headers.get("x-ingress-path", "") + "/", status_code=303)
     import asyncio
     provider = db_reader.get_setting("geocoder_provider", "")
-    key = db_reader.get_secret("geocoder_key", "") or None
+    key = db_reader.get_secret(geocode.key_setting(provider), "") or None
     await asyncio.get_event_loop().run_in_executor(
         None, db_reader.generate_fuel_auto_note, purchase_id, provider, key)
     return templates.TemplateResponse(request, "partials/fuel_content.html", _fuel_ctx(request),
@@ -2563,6 +2586,10 @@ async def settings_page(request: Request):
                 "mqtt_discovery": db_reader.get_setting("mqtt_discovery", "1"),
                 "geocoder_provider": db_reader.get_setting("geocoder_provider", ""),
                 "geocoder_key_set": bool(db_reader.get_setting("geocoder_key", "")),
+                "amap_geocoder_key_set": bool(db_reader.get_setting("amap_geocoder_key", "")),
+                "amap_vector_enabled": db_reader.get_setting("amap_vector_enabled", "0"),
+                "amap_js_key_set": bool(db_reader.get_setting("amap_js_key", "")),
+                "amap_js_security_code_set": bool(db_reader.get_setting("amap_js_security_code", "")),
                 "positions_retention_days": db_reader.get_setting("positions_retention_days", "0"),
                 "desktop_autostart": db_reader.get_setting("desktop_autostart", "0"),
                 "map_station_min_sessions": db_reader.get_setting("map_station_min_sessions", "1"),
@@ -3049,7 +3076,7 @@ async def wallbox_live(request: Request):
     # is the worst place to get the vehicle wrong. Empty before the poller has seen the car.
     vehicle, _ = db_reader.get_vehicle()
     return templates.TemplateResponse(request, "partials/wallbox_live.html", _ctx(
-        wb=wb, car_plugged=car_plugged, car_model=(vehicle or {}).get("car_type") or ""))
+        wb=wb, car_plugged=car_plugged, car_model=_display_model((vehicle or {}).get("car_type"))))
 
 
 def _wallbox_sessions_grouped() -> list:
@@ -3663,19 +3690,67 @@ async def save_cost_dynamic(request: Request):
 
 @app.post("/api/settings/geocoder", response_class=HTMLResponse)
 async def save_geocoder(request: Request):
-    """Store the geocoding provider and its optional API key, used for better address/house-number
-    coverage on the Navigation page and for where trips start and end and charges happen, and the switch
-    for the latter (place_lookup). Empty = keyless Photon/Nominatim."""
+    """Save the address provider, its key and the automatic lookup preference."""
     form = await request.form()
+    t = i18n.get_t(db_reader.get_language())
+    provider = str(form.get("geocoder_provider", db_reader.get_setting("geocoder_provider", ""))).strip()
+    if provider and provider not in geocode.NAMES:
+        return HTMLResponse(status_code=400)
+    key = (form.get("geocoder_key") or "").strip()
+    key_setting = geocode.key_setting(provider)
+    if provider == "amap" and not key and not db_reader.get_secret(key_setting, ""):
+        return HTMLResponse(f'<span class="text-amber-300">{t("geocoder_amap_key_required")}</span>')
+    if "amap_vector_present" in form and templates.env.globals["china_market"]():
+        enabled = bool(form.get("amap_vector_enabled"))
+        js_key = str(form.get("amap_js_key") or "").strip()
+        security_code = str(form.get("amap_js_security_code") or "").strip()
+        if any(value and not re.fullmatch(r"[a-zA-Z0-9_-]{1,128}", value)
+               for value in (js_key, security_code)):
+            return HTMLResponse(f'<span class="text-amber-300">{t("amap_vector_invalid")}</span>')
+        if enabled and (not (js_key or db_reader.get_setting("amap_js_key", ""))
+                        or not (security_code or db_reader.get_secret("amap_js_security_code"))):
+            return HTMLResponse(f'<span class="text-amber-300">{t("amap_vector_keys_required")}</span>')
+        if js_key:
+            db_reader.set_setting("amap_js_key", js_key)
+        if security_code:
+            db_reader.set_secret("amap_js_security_code", security_code)
+        db_reader.set_setting("amap_vector_enabled", "1" if enabled else "0")
+    if key:
+        db_reader.set_secret(key_setting, key)
     if "geocoder_provider" in form:
-        db_reader.set_setting("geocoder_provider", (form.get("geocoder_provider") or "").strip())
+        db_reader.set_setting("geocoder_provider", provider)
     if "place_lookup_present" in form:      # the marker, not the box: unticked, it submits nothing, like a form without it
         db_reader.set_setting("place_lookup", "1" if form.get("place_lookup") else "0")
-    gkey = (form.get("geocoder_key") or "").strip()
-    if gkey:  # masked field: only overwrite on a non-empty submit
-        db_reader.set_secret("geocoder_key", gkey)
-    t = i18n.get_t(db_reader.get_language())
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("geocoder_saved")}</span>')
+
+
+@app.get("/api/_AMapService/v4/map/styles")
+def amap_vector_styles(request: Request):
+    """Sign only the JS SDK's style request, using the configured key and a fixed upstream."""
+    key = _amap_vector_key() if templates.env.globals["china_market"]() else ""
+    if not key:
+        return Response(status_code=404)
+    if request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
+        return Response(status_code=403)
+    args = [(name, value) for name, value in request.query_params.multi_items()
+            if name not in ("jscode", "key", "callback")]
+    args += [("key", key), ("jscode", db_reader.get_secret("amap_js_security_code"))]
+    upstream = HTTPSConnection("webapi.amap.com", timeout=8)
+    try:
+        upstream.request("GET", "/v4/map/styles?" + urlencode(args))
+        result = upstream.getresponse()
+        if result.status != 200:
+            return Response(status_code=502)
+        content = result.read(2_000_001)
+        if len(content) > 2_000_000:
+            return Response(status_code=502)
+        # This is a same-origin endpoint. Treat the upstream response only as data.
+        return Response(content, media_type="application/json",
+                        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})
+    except (OSError, HTTPException):
+        return Response(status_code=502)
+    finally:
+        upstream.close()
 
 
 @app.post("/api/settings/map-station-threshold", response_class=HTMLResponse)
@@ -3790,7 +3865,8 @@ async def export_trips_csv():
     trips = db_reader.get_trips(limit=1_000_000)
     db_reader.trip_places(trips)                     # start_place, end_place: the note no longer holds them
     for t in trips:
-        for key in ("search_text", "start_place_osm", "end_place_osm", "start_place_charging", "end_place_charging"):
+        for key in ("search_text", "start_place_osm", "end_place_osm", "start_place_charging", "end_place_charging",
+                    "start_address_provider", "end_address_provider"):
             t.pop(key, None)
     return _csv_response(trips, "leapmotor-mate-trips.csv")
 
@@ -3800,7 +3876,8 @@ async def export_charges_csv():
     charges = db_reader.get_charges(limit=1_000_000)
     db_reader.charge_places(charges)                 # place as its card names it; the address, also beside a station
     for c in charges:
-        for key in ("search_text", "place_osm", "place_charging", "address_osm", "gps_fix", "address_found"):
+        for key in ("search_text", "place_osm", "place_charging", "address_osm", "gps_fix",
+                    "address_found", "address_refreshable"):
             c.pop(key, None)
     return _csv_response(charges, "leapmotor-mate-charges.csv")
 
@@ -3853,16 +3930,16 @@ async def import_database(request: Request):
     form = await request.form()
     up = form.get("file")
     if up is None or not hasattr(up, "read"):
-        return HTMLResponse("<div class='text-sm text-red-400'>⚠️ " + t("restore_db_nofile") + "</div>",
+        return HTMLResponse("<div class='text-sm text-red-400'>⚠ " + t("restore_db_nofile") + "</div>",
                             status_code=400)
     blob = await up.read()
     from html import escape as _esc   # the text of an exception can quote the uploaded file
     try:
         res = db_reader.restore_database(blob)
     except ValueError as e:
-        return HTMLResponse("<div class='text-sm text-red-400'>⚠️ " + _esc(str(e)) + "</div>", status_code=400)
+        return HTMLResponse("<div class='text-sm text-red-400'>⚠ " + _esc(str(e)) + "</div>", status_code=400)
     except Exception as e:  # noqa: BLE001
-        return HTMLResponse("<div class='text-sm text-red-400'>⚠️ " + _esc(str(e)) + "</div>", status_code=500)
+        return HTMLResponse("<div class='text-sm text-red-400'>⚠ " + _esc(str(e)) + "</div>", status_code=500)
     _restart_container()   # exit 42 → run.sh relaunches poller + web → both reopen the restored DB
     n = res["counts"]
     return HTMLResponse(
@@ -5562,7 +5639,7 @@ def _cmd_error_html(msg: str) -> str:
     t = i18n.get_t(db_reader.get_language())
     outcome = command_client._classify_outcome(False, msg)
     if outcome == "timeout_car":
-        return f'<span data-warn="1" style="color:#fbbf24">⏱️ {t("cmd_timeout_car")}</span>'
+        return f'<span data-warn="1" style="color:#fbbf24">⏱ {t("cmd_timeout_car")}</span>'
     if outcome == "cloud_unreachable":
         return f'<span data-warn="1" style="color:#fbbf24">📡 {t("cmd_cloud_unreach")}</span>'
     # The message is the cloud's answer or an exception's text, and htmx puts this into the page:
@@ -5711,7 +5788,7 @@ async def run_command(name: str, request: Request, background_tasks: BackgroundT
                     db_reader.get_language(), "Not supported on this model")
         return _cmd_response(request, status=400,
                              payload={"ok": False, "error": _msg, "unsupported": True},
-                             html=f'<span data-warn="1" style="color:#fbbf24">⚠️ {_msg}</span>')
+                             html=f'<span data-warn="1" style="color:#fbbf24">⚠ {_msg}</span>')
 
     # The car locks some controls (sunshade, trunk, windows, lock) while moving —
     # intercept the press and show the same notice the official app does, instead of
@@ -5722,7 +5799,7 @@ async def run_command(name: str, request: Request, background_tasks: BackgroundT
                                   i18n.get_t(db_reader.get_language()))
     if warn:
         return _cmd_response(request, payload={"ok": False, "error": warn, "blocked": True},
-                             html=f'<span data-warn="1" style="color:#fbbf24">⚠️ {warn}</span>')
+                             html=f'<span data-warn="1" style="color:#fbbf24">⚠ {warn}</span>')
 
     # Remote-action cooldown (like the HA integration's 10s): don't fire commands too
     # close together — the previous one may still be completing on the car.
@@ -5882,7 +5959,8 @@ async def cn_sms_verify(request: Request):
         api = ChinaAPIClient(device_id=db_reader.get_or_create_device_id())
         login_id, cars = await asyncio.to_thread(api.verify_sms, body.get("phone", ""), body.get("sms_code", ""))
         return JSONResponse({"login_id": login_id, "vehicles": [{"vin": car.vin, "car_type": car.car_type,
-            "year": car.year, "is_shared": car.is_shared} for car in cars]})
+            "model_name": _display_model(car.car_type), "year": car.year, "is_shared": car.is_shared}
+            for car in cars]})
     except ChinaError as error:
         from cn_language import language, localize_error
         return JSONResponse({"error": localize_error(error, language(body.get('language'))), "code": error.code}, status_code=400)

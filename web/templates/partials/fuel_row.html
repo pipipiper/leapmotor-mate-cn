@@ -16,7 +16,7 @@
   <button hx-get="api/fuel/{{ p.id }}/edit-form" hx-target="#fuel-row-{{ p.id }}" hx-swap="outerHTML"
           title="{{ t('fuel_edit') }}"
           class="text-slate-500 hover:text-brand px-2 text-base flex-shrink-0"
-          style="background:none;border:none;cursor:pointer">✏️</button>
+          style="background:none;border:none;cursor:pointer">✏</button>
   {# 🧭 — fill the note with where the car was standing (@gm27271, beta discussion #14: "then
      users do not need to enter any notes"). It asks first only when there is a note to lose. #}
   <button hx-post="api/fuel/{{ p.id }}/auto-note" hx-target="#fuel-content" hx-swap="innerHTML"

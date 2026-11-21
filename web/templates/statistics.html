@@ -193,7 +193,7 @@ document.getElementById('cn-energy-reload').onclick = async function () {
    usual is_reev+research gate server-side. #}
 {% if efftemp and efftemp.points %}
 <div class="card mb-6">
-  <h2 class="font-semibold text-white mb-1">🌡️ {{ t('stats_efftemp_title') }}</h2>
+  <h2 class="font-semibold text-white mb-1">🌡 {{ t('stats_efftemp_title') }}</h2>
   <p class="text-xs text-slate-400 mb-3">{{ t('stats_efftemp_hint').format(km=efftemp.min_km|int) }}</p>
   <canvas id="chart-efftemp" height="230"></canvas>
   {% if efftemp.trend %}

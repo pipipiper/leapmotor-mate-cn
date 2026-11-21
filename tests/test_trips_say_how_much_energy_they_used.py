@@ -40,7 +40,7 @@ def test_a_tile_says_the_energy_all_trips_used(tmp_path, monkeypatch):
 def test_a_days_heading_says_the_energy_its_trips_used(tmp_path, monkeypatch):
     _three_trips(tmp_path, monkeypatch)
     html = _drawer()
-    assert "30 km 1h 00m 3.5 kWh ♻️ 0.75 kWh 17.5" in _sums(html), _sums(html)
+    assert "30 km 1h 00m 3.5 kWh ♻ 0.75 kWh 17.5" in _sums(html), _sums(html)
     assert 'data-tip="Energy Used">3.5 kWh<' in html
 
 

@@ -10,7 +10,7 @@
      it. Listed here, above whatever month is open, with the date as stored, its edit form and its bin. #}
   {% if undated %}
   <section id="charges-undated" class="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
-    <div class="text-sm font-semibold text-amber-300">⚠️ {{ t('charges_undated_title') }}</div>
+    <div class="text-sm font-semibold text-amber-300">⚠ {{ t('charges_undated_title') }}</div>
     <div class="text-xs text-slate-400 mt-1 mb-3">{{ t('charges_undated_help') }}</div>
     {% set calendar_context = false %}
     <div class="space-y-2">

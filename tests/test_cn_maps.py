@@ -24,8 +24,11 @@ def test_browser_conversion_matches_the_ingest_conversion():
     for point,row in zip(POINTS[-2:],rows[-2:]):assert row['forward']==row['inverse']==list(point)
 
 
-@pytest.mark.parametrize('width',[390,1100])
-def test_projection_styles_click_inverse_and_fallback_in_browser(width,tmp_path):
+@pytest.mark.parametrize('width,provider,vector', [
+    (390, 'amap', None), (1100, 'amap', None), (390, 'osm', None),
+    (390, 'amap', 'ready'), (1100, 'amap', 'error'),
+])
+def test_projection_styles_click_inverse_and_fallback_in_browser(width,provider,vector,tmp_path):
     pw=pytest.importorskip('playwright.sync_api')
     html='''<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
       <script src="/static/vendor/leaflet/leaflet.js"></script>
@@ -38,11 +41,16 @@ def test_projection_styles_click_inverse_and_fallback_in_browser(width,tmp_path)
       window.line=L.polyline([original,endpoint]).addTo(map);
       window.circle=L.circle(original,{radius:100}).addTo(map);
       window.clicked=null;map.on('click',e=>clicked=[e.latlng.lat,e.latlng.lng]);
-      </script></body></html>'''
+      </script></body></html>'''.replace('<html>', f'<html data-mate-map-provider="{provider}">', 1)
     requests=[]
+    if vector:
+        html = html.replace('<head>', '<head><base href="/ingress/">', 1)
+        html = html.replace('data-mate-map-provider=', 'data-mate-amap-js-key="synthetic-js" '
+                            'data-mate-amap-vector-fallback="Vector fallback" data-mate-map-provider=', 1)
     with pw.sync_playwright() as p:
         browser=p.chromium.launch()
-        page=browser.new_page(viewport={'width':width,'height':650})
+        retina = width == 390
+        page=browser.new_page(viewport={'width':width,'height':650}, device_scale_factor=2 if retina else 1)
         errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         def serve(route):
             url=route.request.url
@@ -51,10 +59,68 @@ def test_projection_styles_click_inverse_and_fallback_in_browser(width,tmp_path)
                 file=ROOT/'web/static'/url.split('/static/',1)[1]
                 return route.fulfill(body=file.read_bytes(),content_type='text/css' if file.suffix=='.css' else ('application/javascript' if file.suffix=='.js' else 'image/png'))
             requests.append(url)
+            if url.startswith('https://webapi.amap.com/maps?'):
+                if vector == 'error':
+                    return route.abort()
+                return route.fulfill(content_type='application/javascript', body="""
+                    window.AMap = { Map: class {
+                        constructor(container, options) {
+                            window.vector = this;
+                            this.options = options;
+                            this.camera = {zoom: options.zoom, center: options.center};
+                        }
+                        on(event, callback) { if (event === 'complete') setTimeout(callback, 0); }
+                        setZoomAndCenter(zoom, center) {
+                            this.camera = {zoom: this.options.zoomEnable === false ? this.camera.zoom : zoom, center};
+                        }
+                        destroy() { this.destroyed = true; }
+                        setMapStyle(style) { this.options.mapStyle = style; }
+                    } };
+                """)
             route.fulfill(body='<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#bcc8d0"/><path d="M0 128h256M128 0v256" stroke="#fff" stroke-width="8"/></svg>',content_type='image/svg+xml')
         page.route('**/*',serve)
         page.goto('http://mate-map.test/')
+        attribution = page.locator('.leaflet-control-attribution')
+        if vector == 'ready':
+            page.wait_for_function('map._mateTiles.vectorReady && window.vector.camera')
+            assert not attribution.is_visible()
+            assert page.evaluate('map._mateTiles.layer') is None
+            assert page.evaluate('_AMapSecurityConfig.serviceHost') == 'http://mate-map.test/ingress/api/_AMapService'
+            assert page.evaluate('vector.camera.center') == pytest.approx(wgs84_to_gcj02(*POINTS[0])[::-1])
+            assert page.evaluate('marker.getLatLng()') == {'lat':POINTS[0][0],'lng':POINTS[0][1]}
+            assert not page.locator('.mate-map-style [role=status]').is_visible()
+            page.locator('.leaflet-control-zoom-in').click()
+            page.wait_for_function('map.getZoom() === 17 && vector.camera.zoom === 17')
+            page.locator('#map').hover()
+            page.mouse.wheel(0, 120)
+            page.wait_for_function('map.getZoom() < 17 && vector.camera.zoom === map.getZoom()')
+            page.evaluate('map.setView(endpoint, 14, {animate:false})')
+            page.wait_for_function('vector.camera.zoom === 14')
+            assert page.evaluate('vector.camera.center') == pytest.approx(wgs84_to_gcj02(39.91,116.40)[::-1])
+            page.locator('select[aria-label="地图底图"]').select_option('satellite')
+            assert page.evaluate('vector.destroyed && map._mateTiles.layer._url.includes("webst")')
+            page.locator('select[aria-label="地图底图"]').select_option('vector')
+            page.wait_for_function('map._mateTiles.vectorReady && vector.options.mapStyle.endsWith("/normal")')
+            assert len([url for url in requests if 'webapi.amap.com/maps?' in url]) == 1
+            page.evaluate('map.remove()')
+            assert page.evaluate('vector.destroyed')
+            assert errors == []
+            browser.close()
+            return
+        if vector == 'error':
+            page.wait_for_function('map._mateTiles.vectorFailed')
+            assert page.locator('.mate-map-style [role=status]').inner_text() == 'Vector fallback'
         page.wait_for_function('map._mateTiles.layer.isLoading() === false')
+        assert attribution.inner_text() == ('© OpenStreetMap contributors' if provider == 'osm' else '© 高德地图')
+        if provider == 'osm':
+            assert page.evaluate('map.mateTileCoordinateSystem') == 'WGS84'
+            assert page.evaluate('map.project(original,16).distanceTo(L.CRS.EPSG3857.latLngToPoint(L.latLng(...original),16))') < 1e-6
+            assert [url for url in requests if 'openstreetmap.org' in url]
+            assert not any('autonavi.com' in url for url in requests)
+            assert not page.locator('select[aria-label="地图底图"] option[value="satellite"]').count()
+            assert not errors
+            browser.close()
+            return
         result=page.evaluate('''() => {
           const shifted=MateCoordinates.wgs84ToGcj02(...original);
           const actual=map.project(original,16),expected=L.CRS.EPSG3857.latLngToPoint(L.latLng(...shifted),16);
@@ -72,13 +138,20 @@ def test_projection_styles_click_inverse_and_fallback_in_browser(width,tmp_path)
         assert result['source']=='GCJ02' and result['zoom']==18
         assert not result['overflow']
         assert any('webrd0' in url and 'style=8' in url for url in requests)
+        assert page.evaluate('map._mateTiles.layer.getTileSize().x') == (128 if retina else 256)
+        assert any('webrd0' in url and url.endswith('&z=' + ('17' if retina else '16')) for url in requests)
         page.locator('select[aria-label="地图底图"]').select_option('satellite')
         assert page.evaluate('map._mateTiles.layer._url').startswith('https://webst0')
         assert page.evaluate('localStorage.getItem("mate.map.style")')=='satellite'
         page.locator('select[aria-label="地图底图"]').select_option('dark')
         assert page.locator('.mate-map-dark').count()==1
-        # A failing provider switches EVERY layer to the WGS84 OSM grid.
-        page.evaluate('map._mateTiles.layer.fire("tileerror");map._mateTiles.layer.fire("tileerror");map._mateTiles.layer.fire("tileerror")')
+        tile_errors = 'for (let index = 0; index < 3; index++) map._mateTiles.layer.fire("tileerror")'
+        if retina:
+            page.evaluate(tile_errors)
+            assert page.evaluate('map.mateTileCoordinateSystem')=='GCJ02'
+            assert page.evaluate('map._mateTiles.layer.getTileSize().x') == 256
+        # A failing standard provider switches EVERY layer to the WGS84 OSM grid.
+        page.evaluate(tile_errors)
         assert page.evaluate('map.mateTileCoordinateSystem')=='WGS84'
         assert page.evaluate('map.project(original,16).distanceTo(L.CRS.EPSG3857.latLngToPoint(L.latLng(...original),16))')<1e-6
         at=page.evaluate('map.latLngToContainerPoint(original).add([40,0])')
@@ -101,6 +174,7 @@ def test_charging_place_map_saves_wgs84_after_gcj02_display(tmp_path,monkeypatch
     monkeypatch.setattr(W,'DB_PATH',str(tmp_path/'cn-map.db'))
     W.set_setting('setup_complete','1');W.set_setting('language','zh-TW')
     client=TestClient(main.app,base_url='http://mate-map.test')
+    client.post('/api/settings/geocoder', data={'geocoder_provider': 'amap', 'geocoder_key': 'synthetic-amap-key'})
     with pw.sync_playwright() as p:
         browser=p.chromium.launch();page=browser.new_page(viewport={'width':390,'height':900})
         errors=[];page.on('pageerror',lambda e:errors.append(str(e)))

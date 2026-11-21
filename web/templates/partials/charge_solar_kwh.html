@@ -19,13 +19,13 @@
     {% if _s > 0 %}
     {# The whole line, not just the number: someone who typed what they BOUGHT instead of what the
        sun gave reads "8.0 paid" where they expected 12.0 and catches it without reading any help. #}
-    <span style="font-size:10px;color:#94a3b8" title="{{ t('solar_kwh_help') }}">🔌 {{ _m|dec(1) }} {{ t('solar_kwh_delivered') }} − ☀️ {{ _s|dec(1) }} {{ t('solar_kwh_solar') }} = {{ _paid|dec(1) }} kWh {{ t('solar_kwh_paid') }}</span>
+    <span style="font-size:10px;color:#94a3b8" title="{{ t('solar_kwh_help') }}">🔌 {{ _m|dec(1) }} {{ t('solar_kwh_delivered') }} − ☀ {{ _s|dec(1) }} {{ t('solar_kwh_solar') }} = {{ _paid|dec(1) }} kWh {{ t('solar_kwh_paid') }}</span>
     {% endif %}
     <button type="button" title="{{ t('solar_kwh_help') }}"
             onclick="var f=document.getElementById('sk-form-{{ charge.id }}');f.classList.toggle('hidden');if(!f.classList.contains('hidden'))document.getElementById('sk-in-{{ charge.id }}').focus()"
             style="background:transparent;border:1px dashed #33415599;border-radius:6px;color:#64748b;
                    padding:1px 7px;font-size:10px;cursor:pointer;white-space:nowrap">
-      ✎{% if _s <= 0 %} ☀️ {{ t('solar_kwh_label') }}{% endif %}
+      ✎{% if _s <= 0 %} ☀ {{ t('solar_kwh_label') }}{% endif %}
     </button>
   </div>
 

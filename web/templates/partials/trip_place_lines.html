@@ -14,14 +14,16 @@
       {% else %}<span class="absolute top-0" style="left:3px;width:9px;height:7px;background:repeating-conic-gradient(#111 0% 25%,#fff 0% 50%) 0 0/3px 3px;border:1px solid #333"></span>{% endif %}
     </span>
     {% if p.label %}<span class="text-slate-200 min-w-0 break-words">{{ place_name(p.label, p.charging) }}</span>
-    {% else %}<span class="text-slate-500">—</span>{% if not ns.tip %}{% set ns.tip = true %}<span class="text-slate-600 cursor-help" tabindex="0" data-tip="{{ t('trip_place_unknown_help') }}">ⓘ</span>
+    {% else %}<span class="text-slate-500">—</span>{% endif %}
+    {% if (not p.label or p.refreshable) and not ns.tip %}{% set ns.tip = true %}
+    {% if not p.label %}<span class="text-slate-600 cursor-help" tabindex="0" data-tip="{{ t('trip_place_unknown_help') }}">ⓘ</span>{% endif %}
     <button type="button" title="{{ t('trip_place_look_up') }}" hx-post="api/trips/{{ trip.id }}/places"
             hx-target="#trip-place-lines" hx-swap="outerHTML" hx-disabled-elt="this"
             hx-indicator="#trip-place-spin" data-trip-place-look-up
             class="text-slate-500 hover:text-brand disabled:opacity-40"
             style="background:none;border:none;cursor:pointer;padding:0;font-size:14px;line-height:1">
       <span id="trip-place-spin" class="htmx-indicator">⏳</span><span>🧭</span>
-    </button>{% include "partials/_place_lookup_said.html" %}{% endif %}{% endif %}
+    </button>{% include "partials/_place_lookup_said.html" %}{% endif %}
   </div>
   {% endfor %}
   {% include "partials/_address_credit.html" %}

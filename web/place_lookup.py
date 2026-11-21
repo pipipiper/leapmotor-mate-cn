@@ -187,7 +187,7 @@ def sweep(now: datetime | None = None, pause=time.sleep) -> dict:
     already answers, requests made, and how they went."""
     now = now or datetime.now(timezone.utc)
     chosen = db_reader.get_setting("geocoder_provider", "")
-    key = db_reader.get_secret("geocoder_key", "") or None
+    key = db_reader.get_secret(geocode.key_setting(chosen), "") or None
     cells = _recent_cells(now - timedelta(days=RECENT_DAYS))
     n = {"cells": len(cells), **_ask_each(cells, lambda row, provider: row is None or _due(row, provider, now),
                                          chosen, key, now, pause, _MAX_CALLS)}
@@ -203,10 +203,11 @@ def look_up_now(points, now: datetime | None = None, pause=time.sleep) -> dict:
     counts of _ask_each."""
     now = now or datetime.now(timezone.utc)
     chosen = db_reader.get_setting("geocoder_provider", "")
-    key = db_reader.get_secret("geocoder_key", "") or None
+    key = db_reader.get_secret(geocode.key_setting(chosen), "") or None
     cells = {geohash.encode(lat, lon, 8): (lat, lon) for lat, lon in points if db_reader.has_gps_fix(lat, lon)}
     return _ask_each([(gh, lat, lon) for gh, (lat, lon) in cells.items()],
-                     lambda row, provider: row is None or row["status"] != "found", chosen, key, now, pause)
+                     lambda row, provider: row is None or row["status"] != "found"
+                     or (provider == "amap" and row["provider"] != provider), chosen, key, now, pause)
 
 
 def maybe_sweep() -> None:

@@ -245,7 +245,7 @@
                 hx-post="api/trips/{{ trip.id }}/convert-ec"
                 hx-target="#ec-convert-msg" hx-swap="innerHTML"
                 hx-indicator="#ec-convert-spin">
-          ☁️ {{ t('ec_convert_btn') }}
+          ☁ {{ t('ec_convert_btn') }}
         </button>
         <span id="ec-convert-spin" class="htmx-indicator text-xs text-slate-400 ml-2">…</span>
         <span id="ec-convert-msg" class="ml-2"></span>
@@ -369,7 +369,7 @@
                 hx-post="api/trips/{{ trip.id }}/calc-elevation"
                 hx-target="#elev-calc-msg" hx-swap="innerHTML"
                 hx-indicator="#elev-calc-spin">
-          🏔️ {{ t('elevation_calc_btn') }}
+          🏔 {{ t('elevation_calc_btn') }}
         </button>
       </div>
       {% endif %}

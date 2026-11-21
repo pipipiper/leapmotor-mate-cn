@@ -76,7 +76,7 @@ def test_the_note_is_one_line_of_the_body_with_the_way_to_edit_it(client):
     assert "📝" not in _text(row)
     assert "📝 Shaded spot, reliable" in _text(body)
     assert " hidden" not in re.search(r'<div id="cnote-line-1"[^>]*>', body).group(0)
-    assert re.search(r'<button type="button" id="cnote-edit-1"[^>]*>✏️</button>', body)
+    assert re.search(r'<button type="button" id="cnote-edit-1"[^>]*>✏</button>', body)
     row, body = _card(html, 2)
     assert re.search(r'<div id="cnote-line-2"[^>]*hidden[^>]*>📝 <span></span></div>', body), "an empty line, hidden"
     assert re.search(r'<button type="button" id="cnote-edit-2"[^>]*>📝 Add a note</button>', body)

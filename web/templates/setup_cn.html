@@ -11,8 +11,8 @@
   <header><img src="static/leapmotor-logo.svg" alt="Leapmotor" class="w-32 mb-6 brightness-0 invert"><h1 class="text-3xl font-semibold" data-cn-key="cn_setup_heading">{{ t('cn_setup_heading') }}</h1><p class="text-slate-400 mt-3" data-cn-key="cn_setup_subtitle">{{ t('cn_setup_subtitle') }}</p></header>
   <label class="block text-sm"><span data-cn-key="setup_language">{{ t('setup_language') }}</span>
     <select id="language" class="ml-3 bg-slate-800 rounded-lg px-3 py-2 border border-slate-700">
-      <option value="zh-CN" {% if lang == 'zh-CN' %}selected{% endif %}>🇨🇳 {{ t('lang_zh_cn') }}</option>
-      <option value="zh-TW" {% if lang == 'zh-TW' %}selected{% endif %}>🇭🇰 {{ t('lang_zh_tw') }}</option>
+      <option value="zh-CN" {% if lang == 'zh-CN' %}selected{% endif %}>{{ t('lang_zh_cn') }}</option>
+      <option value="zh-TW" {% if lang == 'zh-TW' %}selected{% endif %}>{{ t('lang_zh_tw') }}</option>
     </select>
   </label>
   <section class="rounded-2xl bg-slate-900 border border-slate-800 p-6 space-y-4">
@@ -59,7 +59,7 @@ function setLanguage(value) {
   byId('phone').placeholder = tr('cn_phone_placeholder')
   for (const title of document.querySelectorAll('[data-car-index]')) {
     const car = cars[Number(title.dataset.carIndex)]
-    title.textContent = `${car.car_type} ${car.year || ''} · ${tr(car.is_shared ? 'cn_shared_vehicle' : 'cn_owned_vehicle')} · ${car.vin.slice(-6)}`
+    title.textContent = `${car.model_name || car.car_type} ${car.year || ''} · ${tr(car.is_shared ? 'cn_shared_vehicle' : 'cn_owned_vehicle')} · ${car.vin.slice(-6)}`
   }
   if (retryRemaining > 0) byId('send').textContent = tr('cn_sms_retry', {n:retryRemaining})
   if (messageKey) byId('message').textContent = tr(messageKey, messageArgs)

@@ -92,7 +92,7 @@
         <div style="font-size:2rem;font-weight:800" class="text-blue-400">{{ energy_abs.total_kwh | nice }}<span style="font-size:1rem;color:#94a3b8;font-weight:400"> kWh</span></div>
       </div>
       <div class="text-right text-xs text-slate-400" style="line-height:1.8">
-        <div>🚗 {{ energy_abs.driving_kwh | nice }} · ❄️ {{ energy_abs.ac_kwh | nice }} · ⚙️ {{ energy_abs.other_kwh | nice }} kWh</div>
+        <div>🚗 {{ energy_abs.driving_kwh | nice }} · ❄ {{ energy_abs.ac_kwh | nice }} · ⚙ {{ energy_abs.other_kwh | nice }} kWh</div>
         <div class="text-slate-500">{{ energy_abs.driving_pct | nice }}% {{ t('reev_elec_driving') }}</div>
       </div>
     </div>

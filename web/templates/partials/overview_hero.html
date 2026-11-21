@@ -96,12 +96,12 @@
     {# CN already serves a still whole-car render; EU composes the animation alongside it. #}
     {% set animate_picture = status and status.charging and not cn_picture %}
     <img src="{{ car_img ~ '&still=1' if animate_picture else car_img }}"
-         {% if animate_picture %}data-live="{{ car_img }}"{% endif %} alt="{{ vehicle.car_type if vehicle else 'Vehicle' }}"
+         {% if animate_picture %}data-live="{{ car_img }}"{% endif %} alt="{{ display_model(vehicle.car_type) if vehicle else 'Vehicle' }}"
          class="max-h-48 w-full object-contain"
          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
     <div class="hidden flex-col items-center justify-center text-slate-600" style="height:12rem">
       {{ ico.mdi('car', 'w-16 h-16') }}
-      <span class="text-sm mt-2 text-slate-400">{{ vehicle.car_type if vehicle else 'Leapmotor' }}</span>
+      <span class="text-sm mt-2 text-slate-400">{{ display_model(vehicle.car_type) if vehicle else 'Leapmotor' }}</span>
     </div>
   </div>
 

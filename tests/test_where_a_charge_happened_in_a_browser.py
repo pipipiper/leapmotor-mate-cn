@@ -77,7 +77,7 @@ def test_the_credit_appears_when_a_card_redraws_its_line_with_an_address(mate):
         assert not _credit_shown(page), "no card shows an address yet"
         with sqlite3.connect(db) as c:                       # the lookup answers while the page is open
             c.execute(*_address(WORK, "Corso Francia", "Torino"))
-        page.locator("#loc-1 button", has_text="✏️").click()
+        page.locator("#loc-1 button", has_text="✏").click()
         page.locator("#loc-manual-1 input").fill("Colonnina Lingotto")
         page.locator("#loc-manual-1 input").press("Enter")
         page.locator("#loc-1 [data-address-osm]").wait_for()
@@ -134,7 +134,7 @@ def test_on_a_phone_a_warning_leaves_the_name_whole(mate):
     pw, browser = chromium(sync_api)
     try:
         page = _open(browser, url, 3, width=390)
-        page.locator("#loc-3 button", has_text="✏️").click()
+        page.locator("#loc-3 button", has_text="✏").click()
         page.locator("#loc-manual-3 input").fill("OCM-123456")
         page.locator("#loc-manual-3 input").press("Enter")
         page.locator("#loc-3 .text-amber-400").wait_for()

@@ -3,7 +3,9 @@
    hx-swap="outerHTML", so navigating months also resets the day-drawer below. Day cells with
    trips instead target only #trips-day-drawer — clicking a day never re-fetches the grid. #}
 <div id="trips-calendar-month" data-cal-month="{{ '' if (year == today.year and month == today.month) else '%d-%02d'|format(year, month) }}"
-     data-year="{{ year }}" data-month="{{ month }}">
+     data-year="{{ year }}" data-month="{{ month }}"
+     class="grid items-start gap-5 lg:grid-cols-[minmax(18rem,2fr)_minmax(0,3fr)]">
+  <div class="mx-auto w-full min-w-0 max-w-2xl">
   <div class="flex items-center justify-between mb-4">
     <button type="button" title="{{ t('charges_calendar_prev') }}"
             hx-get="api/trips/calendar?year={{ prev_year }}&month={{ prev_month }}"
@@ -87,7 +89,7 @@
   </div>
 
   {# data-range: base.html's calendar script lets this grid open several days at once #}
-  <div class="grid grid-cols-7 gap-1 sm:gap-1.5 lg:gap-2" data-range>
+  <div class="grid grid-cols-7 auto-rows-fr gap-1 sm:gap-1.5" data-range>
     {% for week in weeks %}
       {% for cell in week %}
         {% if cell is none %}
@@ -101,25 +103,26 @@
         <button type="button"{% if is_open %} data-selected{% endif %} data-day="{{ cell.day }}"
                 hx-get="api/trips/calendar/day?year={{ year }}&month={{ month }}&day={{ cell.day }}"
                 hx-target="#trips-day-drawer" hx-swap="innerHTML" hx-sync="#trips-day-drawer:replace"
-                class="cal-day aspect-square rounded-lg border flex flex-col items-center justify-center gap-0.5 lg:gap-1 cursor-pointer hover:border-brand transition-colors"
+                class="cal-day min-h-[48px] sm:min-h-14 lg:min-h-16 py-1 rounded-lg border flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:border-brand transition-colors"
                 style="background:#0f172a;border-color:{% if is_today %}#fbbf24{% else %}#1e293b{% endif %}">
-          <span class="text-[11px] sm:text-sm lg:text-lg {% if is_today %}text-yellow-400 font-bold{% else %}text-slate-300{% endif %}">{{ cell.day }}</span>
-          <span class="text-[9px] sm:text-[11px] lg:text-sm text-white font-semibold leading-none">{{ cell.km | dist(0) }}</span>
-          <span class="text-[8px] sm:text-[10px] lg:text-xs text-slate-500 leading-none">{{ cell.count - (cell.cloud_zero_count or 0) }}🚗</span>
+          <span class="text-[11px] sm:text-sm {% if is_today %}text-yellow-400 font-bold{% else %}text-slate-300{% endif %}">{{ cell.day }}</span>
+          <span class="text-[9px] sm:text-xs text-white font-semibold leading-none">{{ cell.km | dist(0) }}</span>
+          <span class="text-[8px] sm:text-[10px] text-slate-400 leading-none">{{ cell.count - (cell.cloud_zero_count or 0) }}🚗</span>
           {% if cell.cloud_zero_count %}<span class="text-[8px] sm:text-[10px] text-slate-500" title="{{ t('cloud_zero_segments') }}">+{{ cell.cloud_zero_count }} cloud</span>{% endif %}
         </button>
         {% else %}
-        <div class="aspect-square rounded-lg flex items-center justify-center"
+        <div data-day="{{ cell.day }}" class="min-h-[48px] sm:min-h-14 lg:min-h-16 rounded-lg flex items-center justify-center"
              style="background:#0a1220;border:1px solid {% if is_today %}#fbbf2455{% else %}#111c2e{% endif %}">
-          <span class="text-[11px] sm:text-sm lg:text-lg {% if is_today %}text-yellow-400 font-bold{% else %}text-slate-600{% endif %}">{{ cell.day }}</span>
+          <span class="text-[11px] sm:text-sm {% if is_today %}text-yellow-400 font-bold{% else %}text-slate-600{% endif %}">{{ cell.day }}</span>
         </div>
         {% endif %}
         {% endif %}
       {% endfor %}
     {% endfor %}
   </div>
+  </div>
 
-  <div id="trips-day-drawer" class="mt-4">
+  <div id="trips-day-drawer" class="min-w-0 border-t border-slate-700/70 pt-4 lg:border-t-0 lg:border-l lg:pl-5 lg:pt-0">
     {% if open_drawer is defined %}
       {# Every name _trips_drawer_ctx gives the drawer's own endpoint; one left out vanishes down this path only. #}
       {% with trips = open_drawer.trips, day_label = open_drawer.day_label, day_totals = open_drawer.day_totals,

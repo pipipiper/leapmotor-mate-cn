@@ -1556,7 +1556,7 @@ def per_car_pin_keys() -> list:
 
 # The secrets kept encrypted at rest. Mirrors poller/db.py's SECRET_KEYS.
 SECRET_KEYS = ("leapmotor_pass", "leapmotor_pin", "mqtt_pass",
-               "geocoder_key", "ha_token", "cn_shared_session")
+               "geocoder_key", "amap_geocoder_key", "amap_js_security_code", "ha_token", "cn_shared_session")
 
 
 _decryption_reported = False
@@ -5829,7 +5829,7 @@ def _point_place(sources: tuple[dict, dict], vehicle_id, lat, lon) -> tuple[dict
     found, places = sources
     a = found.get(geohash.encode(lat, lon, 8))
     address = a and {"label": _address_label(a), "street": _address_label({**dict(a), "name": None, "display_name": None}),
-                     "osm": a["provider"] == "nominatim", "display_name": a["display_name"]}
+                     "provider": a["provider"], "osm": a["provider"] == "nominatim", "display_name": a["display_name"]}
     return _nearest_place(places.get(vehicle_id, []), lat, lon), address
 
 
@@ -5849,6 +5849,7 @@ def trip_places(trips: list[dict]) -> bool:
             words += [label, address and address["display_name"]]
             t[f"{end}_place"], t[f"{end}_place_osm"] = label, bool(not near and address and address["osm"])
             t[f"{end}_place_charging"] = near is not None
+            t[f"{end}_address_provider"] = address and address["provider"]
         t["search_text"] = " ".join(w for w in words if w)
     return places_credit(trips)
 
@@ -5864,9 +5865,11 @@ def charge_places(charges: list[dict]) -> None:
     if not charges:
         return
     sources = _place_sources()
+    amap_selected = get_setting("geocoder_provider", "") == "amap"
     for c in charges:
         near, address = _point_place(sources, c.get("vehicle_id"), c.get("latitude"), c.get("longitude"))
         c["gps_fix"], c["address_found"] = has_gps_fix(c.get("latitude"), c.get("longitude")), address is not None
+        c["address_refreshable"] = bool(amap_selected and address and address["provider"] != "amap")
         named = c.get("charging_place_name") or c.get("location_name")
         c["place"] = named or (near and near["name"]) or (address and address["label"])
         c["place_charging"] = not named and near is not None
@@ -11854,15 +11857,15 @@ EVENT_SIGNAL_KINDS = tuple(k for k in EVENT_KINDS if k not in ("trip", "charge",
 EVENT_LEVEL_KINDS = ("sunshade_level",)        # poller/events.py's LEVELS: a level reached, not a span
 EVENT_GROUP_OF = {k: g for g, kinds in EVENT_GROUPS.items() for k in kinds}
 EVENT_GROUP_ICONS = {"security": "🔒", "doors": "🚪", "windows": "🪟", "charging": "🔌",
-                     "climate": "🌡️", "driving": "🚗", "commands": "📲"}
+                     "climate": "🌡", "driving": "🚗", "commands": "📲"}
 EVENT_GROUP_COLORS = {"security": "#f59e0b", "doors": "#a78bfa", "windows": "#38bdf8",
                       "charging": "#22c55e", "climate": "#f97316", "driving": "#14b8a6",
                       "commands": "#94a3b8"}
 EVENT_ICONS = {
     "unlocked": "🔓", "door_driver": "🚪", "door_passenger": "🚪", "door_rear_left": "🚪",
     "door_rear_right": "🚪", "trunk": "📦", "window_fl": "🪟", "window_rl": "🪟",
-    "sunshade_level": "☀️", "cable": "🔌", "v2l": "💡", "charge": "⚡", "climate": "🌡️", "defrost": "🧊", "rapid_heat": "🔥",
-    "rapid_cool": "❄️", "ready": "🟢", "trip": "🗺", "command": "📲",
+    "sunshade_level": "☀", "cable": "🔌", "v2l": "💡", "charge": "⚡", "climate": "🌡", "defrost": "🧊", "rapid_heat": "🔥",
+    "rapid_cool": "❄", "ready": "🟢", "trip": "🗺", "command": "📲",
 }
 # How far back the Events list reaches, counted back from today: days as days, months to the same
 # day of an earlier month. `all` has no lower bound.

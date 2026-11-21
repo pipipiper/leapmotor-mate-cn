@@ -267,7 +267,7 @@ def test_the_editors_in_the_row_keep_their_own_click(browser, mate, charge_1_kep
     page.locator("#loc-1 [data-place-lookup-said]").wait_for()
     assert not _is_open(page, 1)
 
-    page.locator("#loc-1 button", has_text="✏️").click()
+    page.locator("#loc-1 button", has_text="✏").click()
     assert page.locator("#loc-manual-1").is_visible() and not _is_open(page, 1)
     page.locator("#loc-manual-1 input").press_sequentially("Colonnina Lingotto")   # key by key: a released Space
     assert not _is_open(page, 1)                                                     # is a summary's own key
@@ -340,7 +340,7 @@ def test_a_note_is_written_and_read_in_the_opened_row(browser, mate):
     page.locator("#cnote-1").fill("Shaded spot")
     page.locator("#cnote-form-1 button[type=submit]").click()
     page.wait_for_function("() => document.querySelector('#cnote-line-1').innerText === '📝 Shaded spot'")
-    assert line.is_visible() and button.inner_text() == "✏️" and form.is_hidden(), "the field closes on a save"
+    assert line.is_visible() and button.inner_text() == "✏" and form.is_hidden(), "the field closes on a save"
     button.click()
     page.locator("#cnote-1").fill("Sunny spot, typed by mistake")
     page.locator("#cnote-form-1 button", has_text="Cancel").click()          # Cancel: nothing saved, the field closes

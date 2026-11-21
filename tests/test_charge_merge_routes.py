@@ -197,7 +197,7 @@ def test_a_refused_merge_answers_with_a_message_not_a_crash(tmp_path, monkeypatc
     resp = asyncio.run(main.charges_merge(_req(), a=1, b=404))
 
     assert resp.status_code == 200
-    assert "⚠️" in resp.body.decode()
+    assert "⚠" in resp.body.decode()
     assert _ids() == [2, 1]          # non è cambiato niente
 
 

@@ -124,6 +124,29 @@ def _range_heading(day1, day2):
     return f"{day1:02d} – {day2:02d} "
 
 
+@pytest.mark.parametrize("width", [390, 1024, 1600])
+def test_trip_calendar_and_day_list_adapt_to_screen_width(browser, mate, width):
+    page = browser.new_page(viewport={"width": width, "height": 900})
+    assert page.goto(f"{mate}/trips").status == 200
+    grid = page.locator("#trips-calendar-month [data-range]")
+    active_day = grid.locator('button[data-day="3"]').bounding_box()
+    empty_day = grid.locator('div[data-day="4"]').bounding_box()
+    assert grid.bounding_box()["width"] <= 672
+    assert 48 <= active_day["height"] <= 80
+    assert active_day["height"] == empty_day["height"]
+    grid.locator('button[data-day="3"]').click()
+    drawer = page.locator("#trips-day-drawer")
+    sync_api.expect(drawer.locator('[data-trip-id="1"]')).to_be_visible()
+    calendar = grid.bounding_box()
+    day_list = drawer.bounding_box()
+    if width >= 1024:
+        assert day_list["x"] >= calendar["x"] + calendar["width"]
+        assert day_list["y"] < calendar["y"] + calendar["height"]
+    else:
+        assert day_list["y"] >= calendar["y"] + calendar["height"]
+    page.close()
+
+
 def test_a_shift_click_opens_the_range_with_one_request(browser, mate):
     cal = Calendar(browser, mate)
     cal.swapped(lambda: cal.cell(3).click())
@@ -348,7 +371,7 @@ def test_two_fingers_are_not_a_hold(browser, mate):
 
 def test_a_second_finger_beside_one_off_the_days_is_not_a_hold(browser, mate):
     cal = Calendar(browser, mate, phone=True)
-    box = cal.page.locator("#trips-calendar-month div.aspect-square", has_text="4").first.bounding_box()
+    box = cal.page.locator('#trips-calendar-month div[data-day="4"]').bounding_box()
     off = {"x": box["x"] + box["width"] / 2, "y": box["y"] + box["height"] / 2, "id": 1}   # the 4th drove nothing
     cal.fingers("touchStart", off)
     cal.fingers("touchStart", off, {**cal.centre(5), "id": 2})

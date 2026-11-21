@@ -200,7 +200,7 @@ def test_a_lookup_on_request_that_brings_no_address_says_why(car, monkeypatch, p
     redrawn = car.client.post(f"/api/trips/{tid}/places").text
     assert providers.calls() == [spot(*WORK)]
     said = re.findall(r"<span[^>]*data-place-lookup-said[^>]*>(.*?)</span>", redrawn, re.DOTALL)
-    assert [unescape(s).strip() for s in said] == [f"⚠️ {says}"]
+    assert [unescape(s).strip() for s in said] == [f"⚠ {says}"]
     assert "data-trip-place-look-up" in redrawn, "and it can be asked again"
 
 

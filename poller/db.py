@@ -296,8 +296,8 @@ def trip_distance_km(gps_km: float, has_gps: bool, start_odo: float, end_odo: fl
 
 # Settings keys holding real secrets — encrypted at rest (see crypto.py). Everything
 # else (flags, prefixes, prices, ids, identifiers) stays plaintext.
-SECRET_KEYS = {"leapmotor_pass", "leapmotor_pin", "mqtt_pass", "geocoder_key",
-               "ha_token", "cn_shared_session"}
+SECRET_KEYS = {"leapmotor_pass", "leapmotor_pin", "mqtt_pass", "geocoder_key", "amap_geocoder_key",
+               "amap_js_security_code", "ha_token", "cn_shared_session"}
 
 
 def log_login(path: str, outcome: str, process: str = "poller", reason=None) -> None:

@@ -1,15 +1,15 @@
-"""Geocoding helpers: the Navigation page, the 🧭 buttons and the addresses of trips (place_lookup).
+"""Geocoding helpers for trip and charge addresses and the 🧭 buttons.
 
 Keyless by default (Photon forward / Nominatim reverse, both OpenStreetMap) so it
 works out of the box. An optional provider + API key can be configured for better
 street/house-number coverage — you are never locked to a single vendor:
 
-    geocoder_provider = "geoapify" | "locationiq" | "tomtom" | ""   (empty = keyless)
-    geocoder_key      = "<api key>"
+    geocoder_provider = "amap" | "geoapify" | "locationiq" | "tomtom" | ""
+    geocoder_key      = "<legacy provider API key>"
+    amap_geocoder_key = "<AMap Web Service API key>"
 
-Recommended: Geoapify (free, no credit card, includes OpenAddresses house numbers).
-On any keyed-provider error reverse_geocode falls back to the keyless provider, because someone is
-waiting for its answer; reverse_place asks the chosen provider alone, to be asked again later.
+AMap receives GCJ-02 coordinates; Mate keeps WGS84 internally. Reverse lookups configured for
+AMap stay with that provider. Legacy reverse_geocode providers can fall back to Nominatim.
 Standard library only (urllib) — no new dependency.
 """
 import re
@@ -159,7 +159,45 @@ def _tomtom_reverse(lat, lon, key) -> dict | None:
                   display_name=a.get("freeformAddress"))
 
 
-_REVERSE = {"geoapify": _geoapify_reverse, "locationiq": _locationiq_reverse, "tomtom": _tomtom_reverse}
+def _amap_reverse(lat, lon, key) -> dict | None:
+    from leapmotor_cn.protocol import wgs84_to_gcj02
+
+    if not key:
+        raise ValueError("AMap Web Service key required")
+    gcj_lat, gcj_lon = wgs84_to_gcj02(lat, lon)
+    query = urllib.parse.urlencode({
+        "key": key, "location": f"{gcj_lon:.6f},{gcj_lat:.6f}", "extensions": "base",
+    })
+    try:
+        data = _get("https://restapi.amap.com/v3/geocode/regeo?" + query)
+    except urllib.error.HTTPError as error:
+        raise ValueError(f"AMap HTTP {error.code}") from None
+    if not isinstance(data, dict) or str(data.get("status")) != "1":
+        code = str(data.get("infocode", "")) if isinstance(data, dict) else ""
+        raise ValueError(f"AMap error {code}" if re.fullmatch(r"[0-9]{5}", code) else "AMap lookup failed")
+
+    def field(mapping, name):
+        value = mapping.get(name) if isinstance(mapping, dict) else None
+        return value.strip() or None if isinstance(value, str) else None
+
+    address = data.get("regeocode")
+    formatted = field(address, "formatted_address")
+    if not formatted:
+        return None
+    parts = address.get("addressComponent")
+    street = parts.get("streetNumber") if isinstance(parts, dict) else None
+    return _place(road=field(street, "street"), house_number=field(street, "number"),
+                  suburb=field(parts, "township") or field(parts, "district"),
+                  locality=field(parts, "city") or field(parts, "province"),
+                  country_code="cn", display_name=formatted)
+
+
+_REVERSE = {"amap": _amap_reverse, "geoapify": _geoapify_reverse,
+            "locationiq": _locationiq_reverse, "tomtom": _tomtom_reverse}
+
+
+def key_setting(provider: str) -> str:
+    return "amap_geocoder_key" if provider == "amap" else "geocoder_key"
 
 
 # ── Keyless fallback (OpenStreetMap) ─────────────────────────────────────────
@@ -227,6 +265,9 @@ def reverse_geocode(lat: float, lon: float, provider: str = "", api_key: str | N
     configured, otherwise keyless Nominatim)."""
     if lat is None or lon is None:
         return None
+    if (provider or "").lower() == "amap":
+        result = _amap_reverse(lat, lon, api_key)
+        return result["display_name"] if result else None
     fn = _REVERSE.get((provider or "").lower())
     if fn and api_key:
         try:
@@ -239,7 +280,8 @@ def reverse_geocode(lat: float, lon: float, provider: str = "", api_key: str | N
     return res["display_name"] if res else None
 
 
-NAMES = {"nominatim": "Nominatim", "geoapify": "Geoapify", "locationiq": "LocationIQ", "tomtom": "TomTom"}
+NAMES = {"nominatim": "Nominatim", "amap": "AMap", "geoapify": "Geoapify",
+         "locationiq": "LocationIQ", "tomtom": "TomTom"}
 
 
 def failure(e: Exception) -> str:
@@ -268,7 +310,7 @@ def _said(e: urllib.error.HTTPError) -> str | None:
 def lookup_provider(provider: str = "", api_key: str | None = None) -> str:
     """Who reverse_place asks: the keyed provider when it has its key, otherwise Nominatim."""
     p = (provider or "").lower()
-    return p if p in _REVERSE and api_key else "nominatim"
+    return p if p == "amap" or (p in _REVERSE and api_key) else "nominatim"
 
 
 def reverse_place(lat: float, lon: float, provider: str = "", api_key: str | None = None) -> dict | None:
